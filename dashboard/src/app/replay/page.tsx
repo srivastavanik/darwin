@@ -14,12 +14,13 @@ import { GameGrid } from "@/components/GameGrid";
 import { DeceptionChart } from "@/components/DeceptionChart";
 import { KillTimeline } from "@/components/KillTimeline";
 import { RelationshipWeb } from "@/components/RelationshipWeb";
+import { AgentDetail } from "@/components/AgentDetail";
+import { ExportPanel } from "@/components/ExportPanel";
 import { useGameState } from "@/hooks/useGameState";
-import { getFamilyColor } from "@/lib/colors";
 import type { GameInitData, RoundData, AgentState } from "@/lib/types";
 
 export default function ReplayPage() {
-  const { rounds, initGame, pushRound } = useGameState();
+  const { initGame, pushRound, selectedAgent } = useGameState();
   const [loaded, setLoaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -31,12 +32,14 @@ export default function ReplayPage() {
       const text = await file.text();
       const data = JSON.parse(text);
 
-      // Parse game.json format
+      // Store raw JSON for export
+      useGameState.getState().setGameJson(data);
+
       const config = data.config || {};
       const gameRounds = data.rounds || [];
       const result = data.result || {};
 
-      // Extract agents from first round's data
+      // Extract agents from round data
       const agentsMap: Record<string, Partial<AgentState>> = {};
       for (const round of gameRounds) {
         for (const msg of round.messages || []) {
@@ -78,7 +81,6 @@ export default function ReplayPage() {
         }
       }
 
-      // Build init
       const initData: GameInitData = {
         type: "game_init",
         grid_size: config.grid_size || 6,
@@ -90,7 +92,7 @@ export default function ReplayPage() {
 
       initGame(initData);
 
-      // Push all rounds
+      // Push all rounds with analysis data if available
       for (const round of gameRounds) {
         const roundData: RoundData = {
           round: round.round,
@@ -109,8 +111,8 @@ export default function ReplayPage() {
               (m: { channel: string }) => m.channel === "family"
             ),
           },
-          analysis: {},
-          highlights: [],
+          analysis: round.analysis || {},
+          highlights: round.highlights || [],
           alive_count: Object.keys(round.thoughts || {}).length,
           game_over: false,
           winner: null,
@@ -118,8 +120,10 @@ export default function ReplayPage() {
         pushRound(roundData);
       }
 
-      // Set to round 1 for stepping
       useGameState.getState().setCurrentRound(1);
+      if (result.winner_name) {
+        useGameState.getState().setGameOver(result.winner_name, result.final_reflection);
+      }
       setLoaded(true);
     },
     [initGame, pushRound]
@@ -128,14 +132,15 @@ export default function ReplayPage() {
   if (!loaded) {
     return (
       <div className="h-screen flex items-center justify-center bg-white">
-        <Card className="w-96">
+        <Card className="w-[420px]">
           <CardHeader>
-            <CardTitle>Load Game Replay</CardTitle>
+            <CardTitle className="text-lg">Load Game Replay</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Upload a game.json transcript file to replay the game in the
-              dashboard.
+              Upload a <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">game.json</code> transcript
+              file to replay the game in the dashboard. Step through rounds,
+              inspect agent thoughts, and export analysis.
             </p>
             <input
               ref={fileRef}
@@ -147,6 +152,9 @@ export default function ReplayPage() {
             <Button onClick={() => fileRef.current?.click()} className="w-full">
               Select game.json
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Game transcripts are saved in <code className="bg-gray-100 px-1 py-0.5 rounded">data/games/</code>
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -180,10 +188,13 @@ export default function ReplayPage() {
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30} minSize={15}>
             <div className="h-full p-2">
-              <RelationshipWeb />
+              {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+      </div>
+      <div className="border-t px-4 py-2 flex items-center justify-end bg-white">
+        <ExportPanel />
       </div>
     </div>
   );

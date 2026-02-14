@@ -10,7 +10,7 @@ import { getFamilyColor, SEVERITY_COLORS } from "@/lib/colors";
 import type { AgentAnalysis, HighlightData, MessageData, RoundData } from "@/lib/types";
 
 export function ThoughtStream() {
-  const { rounds, currentRound, agents } = useGameState();
+  const { rounds, currentRound, agents, setSelectedAgent } = useGameState();
   const endRef = useRef<HTMLDivElement>(null);
 
   const visibleRounds = rounds.slice(0, currentRound);
@@ -65,27 +65,28 @@ function RoundSection({
       ))}
 
       {/* Agent entries: thought + what they said */}
-      {Object.entries(thoughts).map(([agentId, thought]) => {
-        const agent = agents[agentId];
-        if (!agent) return null;
-        const agentAnalysis = analysis[agentId];
-        const agentMessages = getAllAgentMessages(agentId, messages);
+          {Object.entries(thoughts).map(([agentId, thought]) => {
+            const agent = agents[agentId];
+            if (!agent) return null;
+            const agentAnalysis = analysis[agentId];
+            const agentMessages = getAllAgentMessages(agentId, messages);
 
-        return (
-          <ThoughtEntry
-            key={agentId}
-            agentId={agentId}
-            agentName={agent.name}
-            family={agent.family}
-            tier={agent.tier}
-            color={getFamilyColor(agent.family)}
-            alive={agent.alive}
-            thought={thought}
-            analysis={agentAnalysis}
-            messagesSent={agentMessages}
-          />
-        );
-      })}
+            return (
+              <ThoughtEntry
+                key={agentId}
+                agentId={agentId}
+                agentName={agent.name}
+                family={agent.family}
+                tier={agent.tier}
+                color={getFamilyColor(agent.family)}
+                alive={agent.alive}
+                thought={thought}
+                analysis={agentAnalysis}
+                messagesSent={agentMessages}
+                onClickAgent={() => useGameState.getState().setSelectedAgent(agentId)}
+              />
+            );
+          })}
     </div>
   );
 }
@@ -99,6 +100,7 @@ function ThoughtEntry({
   thought,
   analysis,
   messagesSent,
+  onClickAgent,
 }: {
   agentId: string;
   agentName: string;
@@ -109,6 +111,7 @@ function ThoughtEntry({
   thought: string;
   analysis?: AgentAnalysis;
   messagesSent: MessageData[];
+  onClickAgent?: () => void;
 }) {
   return (
     <div className="mb-3">
@@ -118,7 +121,9 @@ function ThoughtEntry({
         style={{ borderLeft: `3px solid ${color}` }}
       >
         <div className="flex items-center justify-between mb-1.5">
-          <AgentBadge name={agentName} family={family} color={color} tier={tier} alive={alive} small />
+          <button onClick={onClickAgent} className="hover:underline cursor-pointer">
+            <AgentBadge name={agentName} family={family} color={color} tier={tier} alive={alive} small />
+          </button>
           {analysis && <AnalysisBadges analysis={analysis} />}
         </div>
         <p className="text-xs leading-relaxed text-gray-700 font-mono whitespace-pre-wrap">

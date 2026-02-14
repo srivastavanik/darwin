@@ -11,12 +11,14 @@ import { GameGrid } from "@/components/GameGrid";
 import { DeceptionChart } from "@/components/DeceptionChart";
 import { KillTimeline } from "@/components/KillTimeline";
 import { RelationshipWeb } from "@/components/RelationshipWeb";
+import { AgentDetail } from "@/components/AgentDetail";
+import { ExportPanel } from "@/components/ExportPanel";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useGameState } from "@/hooks/useGameState";
 
 export default function DashboardPage() {
   useWebSocket();
-  const { rounds } = useGameState();
+  const { selectedAgent } = useGameState();
 
   return (
     <div className="h-screen flex flex-col bg-white">
@@ -49,13 +51,18 @@ export default function DashboardPage() {
 
           <ResizableHandle withHandle />
 
-          {/* Right: Relationships */}
+          {/* Right: Relationships or Agent Detail */}
           <ResizablePanel defaultSize={30} minSize={15}>
             <div className="h-full p-2">
-              <RelationshipWeb />
+              {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+      </div>
+
+      {/* Bottom export bar */}
+      <div className="border-t px-4 py-2 flex items-center justify-end bg-white">
+        <ExportPanel />
       </div>
     </div>
   );
