@@ -6,7 +6,9 @@ export interface AgentState {
   family: string;
   color: string;
   provider: string;
+  model: string;
   tier: number; // 1=Boss, 2=Lieutenant, 3=Soldier
+  temperature: number;
   position: [number, number];
   alive: boolean;
   eliminated_by: string | null;

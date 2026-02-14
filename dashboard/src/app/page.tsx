@@ -13,16 +13,17 @@ import { KillTimeline } from "@/components/KillTimeline";
 import { RelationshipWeb } from "@/components/RelationshipWeb";
 import { AgentDetail } from "@/components/AgentDetail";
 import { ExportPanel } from "@/components/ExportPanel";
+import { FamilyModelPanel } from "@/components/FamilyModelPanel";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useGameState } from "@/hooks/useGameState";
 
 export default function DashboardPage() {
-  useWebSocket();
+  const { status } = useWebSocket();
   const { selectedAgent } = useGameState();
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <RoundControls />
+      <RoundControls status={status} />
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup orientation="horizontal">
           {/* Left: Thought Stream */}
@@ -53,8 +54,13 @@ export default function DashboardPage() {
 
           {/* Right: Relationships or Agent Detail */}
           <ResizablePanel defaultSize={30} minSize={15}>
-            <div className="h-full p-2">
-              {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
+            <div className="h-full p-2 flex flex-col gap-2">
+              <div className="h-[260px] shrink-0">
+                <FamilyModelPanel />
+              </div>
+              <div className="flex-1 min-h-0">
+                {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
+              </div>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

@@ -64,7 +64,7 @@ export function DeceptionChart() {
       <CardContent className="p-2">
         <ChartContainer config={chartConfig} className="h-[180px] w-full">
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.25)" />
             <XAxis
               dataKey="round"
               tick={{ fontSize: 10 }}

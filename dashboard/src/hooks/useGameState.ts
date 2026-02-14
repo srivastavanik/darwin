@@ -60,6 +60,8 @@ export const useGameState = create<GameStore>((set, get) => ({
       agents[id] = {
         ...a,
         color: getFamilyColor(a.family),
+        model: a.model || "",
+        temperature: a.temperature ?? 0.7,
         eliminated_by: null,
         eliminated_round: null,
       } as AgentState;

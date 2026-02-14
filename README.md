@@ -32,11 +32,11 @@ markov/
   series.py          # Multi-game series runner + config generators
   attribution.py     # Cross-series behavior attribution
 
-dashboard/           # Next.js observer interface
+dashboard/           # Next.js observer interface (Inter + light research theme)
 scripts/
   run.py             # Single random game (engine test)
   run_llm.py         # Single LLM game (2agent/4agent/full/dry-run)
-  run_series.py      # Controlled experiment series (A-E)
+  run_series.py      # Controlled experiment series (A-F)
 ```
 
 ## Setup
@@ -106,10 +106,15 @@ Game output is saved to `data/games/game_{timestamp}/` with:
 cd dashboard && npm run dev
 
 # Option A: Live game with WebSocket
-# (run game in another terminal -- broadcaster wired into orchestrator)
+# (run game in another terminal)
+python -m scripts.run_llm --mode full --broadcast
+# Optional: custom WebSocket endpoint
+# python -m scripts.run_llm --mode full --broadcast --ws-host 0.0.0.0 --ws-port 8765
 
 # Option B: Replay saved game
 # Open http://localhost:3000/replay and upload a game.json file
+# If dashboard runs on another host/port, set:
+#   NEXT_PUBLIC_WS_URL=ws://localhost:8765
 ```
 
 ### Controlled experiment series
@@ -142,7 +147,7 @@ Series output goes to `data/series/{series_id}/` with aggregate metrics and an a
 |---|---|---|---|---|
 | House Clair | Anthropic | Atlas (Opus) | Cipher (Sonnet) | Dot (Haiku) |
 | House Syne | OpenAI | Nova (GPT-5) | Pulse (o3) | Bit (4o-mini) |
-| House Lux | Google | Spark (Gemini Pro) | Flare (Flash Thinking) | Mote (Flash) |
+| House Lux | Google | Spark (Gemini 2.5 Pro) | Flare (Gemini 2.5 Flash) | Mote (Gemini 2.0 Flash) |
 | House Vex | xAI | Raze (Grok-4) | Shard (Grok-3) | Glint (Grok Fast) |
 
 ## Game Rules

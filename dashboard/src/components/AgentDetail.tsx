@@ -139,7 +139,7 @@ export function AgentDetail() {
                 className="h-[120px] w-full"
               >
                 <LineChart data={deceptionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.25)" />
                   <XAxis dataKey="round" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
                   <YAxis domain={[0, 1]} tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={25} />
                   <ChartTooltip content={<ChartTooltipContent />} />

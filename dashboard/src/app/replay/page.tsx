@@ -17,7 +17,8 @@ import { RelationshipWeb } from "@/components/RelationshipWeb";
 import { AgentDetail } from "@/components/AgentDetail";
 import { ExportPanel } from "@/components/ExportPanel";
 import { useGameState } from "@/hooks/useGameState";
-import type { GameInitData, RoundData, AgentState } from "@/lib/types";
+import { FamilyModelPanel } from "@/components/FamilyModelPanel";
+import type { GameInitData, RoundData, AgentState, FamilyConfig } from "@/lib/types";
 
 export default function ReplayPage() {
   const { initGame, pushRound, selectedAgent } = useGameState();
@@ -38,9 +39,13 @@ export default function ReplayPage() {
       const config = data.config || {};
       const gameRounds = data.rounds || [];
       const result = data.result || {};
+      const firstRoundGridAgents = gameRounds[0]?.grid?.agents || [];
 
       // Extract agents from round data
       const agentsMap: Record<string, Partial<AgentState>> = {};
+      for (const agent of firstRoundGridAgents) {
+        agentsMap[agent.id] = { ...agent };
+      }
       for (const round of gameRounds) {
         for (const msg of round.messages || []) {
           if (msg.sender && !agentsMap[msg.sender]) {
@@ -81,11 +86,62 @@ export default function ReplayPage() {
         }
       }
 
+      // Enrich from config if present
+      const configuredFamilies = (config.families || []) as Array<{
+        name: string;
+        provider: string;
+        color: string;
+        agents: Array<{ name: string; tier: number; model: string; temperature: number }>;
+      }>;
+      for (const family of configuredFamilies) {
+        for (const configAgent of family.agents || []) {
+          const id = configAgent.name.toLowerCase();
+          const existing = agentsMap[id] || {};
+          agentsMap[id] = {
+            id,
+            name: configAgent.name,
+            family: family.name,
+            provider: family.provider,
+            model: configAgent.model,
+            tier: configAgent.tier,
+            temperature: configAgent.temperature,
+            alive: existing.alive ?? true,
+            position: existing.position || [0, 0],
+            eliminated_by: existing.eliminated_by || null,
+            eliminated_round: existing.eliminated_round || null,
+          };
+        }
+      }
+
+      const families: FamilyConfig[] =
+        configuredFamilies.length > 0
+          ? configuredFamilies.map((family) => ({
+              name: family.name,
+              provider: family.provider,
+              color: family.color,
+              agent_ids: (family.agents || []).map((a) => a.name.toLowerCase()),
+            }))
+          : Object.values(agentsMap).reduce<FamilyConfig[]>((acc, agent) => {
+              const family = agent.family || "Unknown";
+              const found = acc.find((f) => f.name === family);
+              if (found) {
+                if (agent.id) found.agent_ids.push(agent.id);
+                return acc;
+              }
+              acc.push({
+                name: family,
+                provider: agent.provider || "",
+                color: "#9CA3AF",
+                agent_ids: agent.id ? [agent.id] : [],
+              });
+              return acc;
+            }, []);
+
       const initData: GameInitData = {
         type: "game_init",
         grid_size: config.grid_size || 6,
         agents: agentsMap as GameInitData["agents"],
-        families: [],
+        families,
         total_rounds: gameRounds.length,
         result,
       };
@@ -96,7 +152,10 @@ export default function ReplayPage() {
       for (const round of gameRounds) {
         const roundData: RoundData = {
           round: round.round,
-          grid: { size: config.grid_size || 6, agents: [] },
+          grid: {
+            size: config.grid_size || 6,
+            agents: round.grid?.agents || [],
+          },
           events: round.events || [],
           thoughts: round.thoughts || {},
           messages: {
@@ -113,7 +172,9 @@ export default function ReplayPage() {
           },
           analysis: round.analysis || {},
           highlights: round.highlights || [],
-          alive_count: Object.keys(round.thoughts || {}).length,
+          alive_count:
+            round.grid?.agents?.filter((a: { alive: boolean }) => a.alive).length ??
+            Object.keys(round.thoughts || {}).length,
           game_over: false,
           winner: null,
         };
@@ -163,7 +224,7 @@ export default function ReplayPage() {
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <RoundControls />
+      <RoundControls status="replay" />
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup orientation="horizontal">
           <ResizablePanel defaultSize={30} minSize={20}>
@@ -187,8 +248,13 @@ export default function ReplayPage() {
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30} minSize={15}>
-            <div className="h-full p-2">
-              {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
+            <div className="h-full p-2 flex flex-col gap-2">
+              <div className="h-[260px] shrink-0">
+                <FamilyModelPanel />
+              </div>
+              <div className="flex-1 min-h-0">
+                {selectedAgent ? <AgentDetail /> : <RelationshipWeb />}
+              </div>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

@@ -31,7 +31,7 @@ export function GameGrid() {
     ctx.fillRect(0, 0, totalSize, totalSize);
 
     // Grid lines
-    ctx.strokeStyle = "#E5E7EB";
+    ctx.strokeStyle = "#111111";
     ctx.lineWidth = 1;
     for (let i = 0; i <= gridSize; i++) {
       const x = PADDING + i * CELL_SIZE;
@@ -48,7 +48,7 @@ export function GameGrid() {
     }
 
     // Row/col labels
-    ctx.fillStyle = "#9CA3AF";
+    ctx.fillStyle = "#111111";
     ctx.font = "11px Inter, sans-serif";
     ctx.textAlign = "center";
     for (let i = 0; i < gridSize; i++) {

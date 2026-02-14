@@ -1,10 +1,28 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useGameState } from "@/hooks/useGameState";
+import type { WebSocketStatus } from "@/hooks/useWebSocket";
 
-export function RoundControls() {
+const STATUS_LABEL: Record<WebSocketStatus | "replay", string> = {
+  connecting: "Connecting",
+  connected: "Live",
+  reconnecting: "Reconnecting",
+  disconnected: "Disconnected",
+  replay: "Replay",
+};
+
+const STATUS_CLASS: Record<WebSocketStatus | "replay", string> = {
+  connecting: "bg-gray-100 text-gray-700",
+  connected: "bg-black text-white",
+  reconnecting: "bg-amber-100 text-amber-800",
+  disconnected: "bg-red-100 text-red-700",
+  replay: "bg-blue-100 text-blue-800",
+};
+
+export function RoundControls({ status = "disconnected" }: { status?: WebSocketStatus | "replay" }) {
   const {
     currentRound,
     rounds,
@@ -48,6 +66,18 @@ export function RoundControls() {
         <h1 className="text-lg font-semibold tracking-tight text-black">
           MARKOV
         </h1>
+        <div className="flex items-center gap-2">
+          <Link href="/" className="text-xs font-medium text-black underline-offset-2 hover:underline">
+            Live
+          </Link>
+          <span className="text-muted-foreground text-xs">/</span>
+          <Link href="/replay" className="text-xs font-medium text-black underline-offset-2 hover:underline">
+            Replay
+          </Link>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded ${STATUS_CLASS[status]}`}>
+          {STATUS_LABEL[status]}
+        </span>
         <span className="text-sm text-muted-foreground">
           Round {currentRound} / {rounds.length || "..."}
         </span>
