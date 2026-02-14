@@ -44,15 +44,15 @@ families:
     agents:
       - name: "Spark"
         tier: 1
-        model: "gemini-2.5-pro-preview-05-06"
+        model: "gemini/gemini-2.5-pro-preview-05-06"
         temperature: 0.6
       - name: "Flare"
         tier: 2
-        model: "gemini-2.5-flash-preview-04-17"
+        model: "gemini/gemini-2.5-flash-preview-04-17"
         temperature: 0.7
       - name: "Mote"
         tier: 3
-        model: "gemini-2.0-flash"
+        model: "gemini/gemini-2.0-flash"
         temperature: 0.8
 
   - name: "House Vex"
@@ -61,13 +61,13 @@ families:
     agents:
       - name: "Raze"
         tier: 1
-        model: "grok-4"
+        model: "xai/grok-4"
         temperature: 0.6
       - name: "Shard"
         tier: 2
-        model: "grok-3"
+        model: "xai/grok-3"
         temperature: 0.7
       - name: "Glint"
         tier: 3
-        model: "grok-3-fast"
+        model: "xai/grok-3-fast"
         temperature: 0.8

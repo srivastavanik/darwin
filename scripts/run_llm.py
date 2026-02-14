@@ -53,13 +53,13 @@ def _build_2agent_config() -> GameConfig:
                 name="House Lux",
                 provider="google",
                 color="#FACC15",
-                agents=[AgentConfig(name="Spark", tier=1, model="gemini-2.0-flash", temperature=0.7)],
+                agents=[AgentConfig(name="Spark", tier=1, model="gemini/gemini-2.0-flash", temperature=0.7)],
             ),
             FamilyConfig(
                 name="House Vex",
                 provider="xai",
                 color="#F87171",
-                agents=[AgentConfig(name="Raze", tier=1, model="grok-3-fast", temperature=0.7)],
+                agents=[AgentConfig(name="Raze", tier=1, model="xai/grok-3-fast", temperature=0.7)],
             ),
         ],
     )
@@ -93,13 +93,13 @@ def _build_4agent_config() -> GameConfig:
                 name="House Lux",
                 provider="google",
                 color="#FACC15",
-                agents=[AgentConfig(name="Spark", tier=1, model="gemini-2.0-flash", temperature=0.7)],
+                agents=[AgentConfig(name="Spark", tier=1, model="gemini/gemini-2.0-flash", temperature=0.7)],
             ),
             FamilyConfig(
                 name="House Vex",
                 provider="xai",
                 color="#F87171",
-                agents=[AgentConfig(name="Raze", tier=1, model="grok-3-fast", temperature=0.7)],
+                agents=[AgentConfig(name="Raze", tier=1, model="xai/grok-3-fast", temperature=0.7)],
             ),
         ],
     )

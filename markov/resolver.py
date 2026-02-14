@@ -194,11 +194,23 @@ def _resolve_moves(
                 ))
                 changed = True
 
-    # Apply valid moves
+    # Apply valid moves in batch to avoid order-of-operations corruption.
+    # When A moves into B's vacated cell, sequential move_agent calls can
+    # corrupt the grid if A is processed before B. Batch: remove all from
+    # old positions first, then place all at new positions.
+    move_plan: list[tuple[str, tuple[int, int], tuple[int, int]]] = []
     for aid in moving_ids:
         old_pos = agents[aid].position
         new_pos = intended[aid]
-        grid.move_agent(aid, new_pos)
+        move_plan.append((aid, old_pos, new_pos))
+
+    # Phase A: remove all movers from their old cells
+    for aid, old_pos, _new_pos in move_plan:
+        grid.remove_agent(aid)
+
+    # Phase B: place all movers at their new cells and update agent state
+    for aid, old_pos, new_pos in move_plan:
+        grid.place_agent(aid, new_pos)
         agents[aid].position = new_pos
         events.append(Event(
             round=round_num,
