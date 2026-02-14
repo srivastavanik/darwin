@@ -47,7 +47,7 @@ export function DeceptionChart() {
     return (
       <Card className="h-full">
         <CardHeader className="py-3 px-4">
-          <CardTitle className="text-sm font-semibold">Deception Delta</CardTitle>
+          <CardTitle className="text-sm font-medium">Deception Delta</CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-32">
           <p className="text-sm text-muted-foreground">No data yet</p>
@@ -59,7 +59,7 @@ export function DeceptionChart() {
   return (
     <Card className="h-full">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold">Deception Delta</CardTitle>
+        <CardTitle className="text-sm font-medium">Deception Delta</CardTitle>
       </CardHeader>
       <CardContent className="p-2">
         <ChartContainer config={chartConfig} className="h-[180px] w-full">

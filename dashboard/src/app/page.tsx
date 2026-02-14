@@ -97,7 +97,7 @@ export default function DashboardPage() {
   }, [refreshGames]);
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col bg-background">
       <RoundControls status={status} />
       <RunControls
         activeGameId={activeGameId}
@@ -108,11 +108,11 @@ export default function DashboardPage() {
         onStart={handleStart}
         onCancel={handleCancel}
       />
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 p-2">
         <ResizablePanelGroup orientation="horizontal">
           {/* Left: Thought Stream */}
           <ResizablePanel defaultSize={30} minSize={20}>
-            <div className="h-full p-2">
+            <div className="h-full p-1.5">
               <ThoughtStream />
             </div>
           </ResizablePanel>
@@ -121,7 +121,7 @@ export default function DashboardPage() {
 
           {/* Center: Grid + Charts */}
           <ResizablePanel defaultSize={40} minSize={25}>
-            <div className="h-full flex flex-col p-2 gap-2">
+            <div className="h-full flex flex-col p-1.5 gap-2">
               <div className="flex-1 min-h-0">
                 <GameGrid />
               </div>
@@ -138,7 +138,7 @@ export default function DashboardPage() {
 
           {/* Right: Relationships or Agent Detail */}
           <ResizablePanel defaultSize={30} minSize={15}>
-            <div className="h-full p-2 flex flex-col gap-2">
+            <div className="h-full p-1.5 flex flex-col gap-2">
               <div className="h-[260px] shrink-0">
                 <FamilyModelPanel />
               </div>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Bottom export bar */}
-      <div className="border-t px-4 py-2 flex items-center justify-end bg-white">
+      <div className="border-t border-black/10 px-4 py-2 flex items-center justify-end bg-card">
         <ExportPanel />
       </div>
     </div>

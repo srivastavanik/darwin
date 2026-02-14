@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useGameState } from "@/hooks/useGameState";
 import type { WebSocketStatus } from "@/hooks/useWebSocket";
 
@@ -15,11 +16,11 @@ const STATUS_LABEL: Record<WebSocketStatus | "replay", string> = {
 };
 
 const STATUS_CLASS: Record<WebSocketStatus | "replay", string> = {
-  connecting: "bg-gray-100 text-gray-700",
-  connected: "bg-black text-white",
-  reconnecting: "bg-amber-100 text-amber-800",
-  disconnected: "bg-red-100 text-red-700",
-  replay: "bg-blue-100 text-blue-800",
+  connecting: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  connected: "bg-black text-white border-black",
+  reconnecting: "bg-amber-100 text-amber-800 border-amber-200",
+  disconnected: "bg-red-100 text-red-700 border-red-200",
+  replay: "bg-blue-100 text-blue-800 border-blue-200",
 };
 
 export function RoundControls({ status = "disconnected" }: { status?: WebSocketStatus | "replay" }) {
@@ -61,37 +62,37 @@ export function RoundControls({ status = "disconnected" }: { status?: WebSocketS
   const totalAgents = Object.keys(useGameState.getState().agents).length || 12;
 
   return (
-    <div className="flex items-center justify-between px-6 py-3 border-b bg-white">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold tracking-tight text-black">
+    <div className="flex items-center justify-between px-5 py-3 border-b border-black/10 bg-card">
+      <div className="flex items-center gap-3 min-w-0">
+        <h1 className="text-base font-medium tracking-tight text-black">
           MARKOV
         </h1>
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-xs font-medium text-black underline-offset-2 hover:underline">
+          <Link href="/" className="text-xs text-black/80 underline-offset-2 hover:text-black hover:underline">
             Live
           </Link>
           <span className="text-muted-foreground text-xs">/</span>
-          <Link href="/replay" className="text-xs font-medium text-black underline-offset-2 hover:underline">
+          <Link href="/replay" className="text-xs text-black/80 underline-offset-2 hover:text-black hover:underline">
             Replay
           </Link>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded ${STATUS_CLASS[status]}`}>
+        <Badge className={`text-[10px] font-medium px-2 py-0.5 border ${STATUS_CLASS[status]}`}>
           {STATUS_LABEL[status]}
-        </span>
-        <span className="text-sm text-muted-foreground">
+        </Badge>
+        <span className="text-xs text-muted-foreground">
           Round {currentRound} / {rounds.length || "..."}
         </span>
-        <span className="text-sm text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {aliveCount}/{totalAgents} alive
         </span>
         {gameOver && (
-          <span className="text-sm font-medium text-black">
+          <span className="text-xs font-medium text-black">
             {winner ? `Winner: ${winner}` : "Game Over"}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Button
           variant="outline"
           size="sm"
@@ -117,7 +118,7 @@ export function RoundControls({ status = "disconnected" }: { status?: WebSocketS
           Step Fwd
         </Button>
         <select
-          className="h-8 px-2 text-xs border rounded-md bg-white"
+          className="h-8 px-2 text-xs border rounded-md bg-white border-black/20"
           value={speed}
           onChange={(e) => setSpeed(Number(e.target.value))}
         >

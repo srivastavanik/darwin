@@ -62,7 +62,7 @@ export function KillTimeline() {
   return (
     <Card className="h-full">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold">Elimination Timeline</CardTitle>
+        <CardTitle className="text-sm font-medium">Elimination Timeline</CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-3">
         {kills.length === 0 ? (
@@ -72,13 +72,13 @@ export function KillTimeline() {
         ) : (
           <div className="relative h-10">
             {/* Timeline bar */}
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-gray-200 -translate-y-1/2" />
+            <div className="absolute top-1/2 left-0 right-0 h-px bg-zinc-300 -translate-y-1/2" />
 
             {/* Round markers */}
             {Array.from({ length: maxRound }, (_, i) => i + 1).map((r) => (
               <div
                 key={r}
-                className="absolute top-1/2 -translate-y-1/2 w-px h-2 bg-gray-300"
+                className="absolute top-1/2 -translate-y-1/2 w-px h-2 bg-zinc-400"
                 style={{ left: `${(r / maxRound) * 100}%` }}
               />
             ))}

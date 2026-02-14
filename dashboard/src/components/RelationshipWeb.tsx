@@ -161,7 +161,7 @@ export function RelationshipWeb() {
   return (
     <Card className="h-full">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold">Relationships</CardTitle>
+        <CardTitle className="text-sm font-medium">Relationships</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center p-2">
         <svg ref={svgRef} className="w-full max-h-[300px]" />

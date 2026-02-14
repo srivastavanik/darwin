@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import type { ApiGameSummary } from "@/lib/api";
 
 interface RunControlsProps {
@@ -32,43 +34,58 @@ export function RunControls({
   );
 
   return (
-    <div className="border-b border-black/10 bg-white px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value as "full" | "quick")}
-          className="h-9 rounded border border-black/20 px-2 text-sm"
-        >
-          <option value="quick">Quick Run (10 rounds cap)</option>
-          <option value="full">Full Run</option>
-        </select>
-        <Button size="sm" onClick={() => onStart(mode)} disabled={loading || Boolean(running)}>
-          Start Game
-        </Button>
-        <Button size="sm" variant="outline" onClick={onRefresh} disabled={loading}>
-          Refresh
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => running && onCancel(running.game_id)}
-          disabled={!running}
-        >
-          Cancel Active
-        </Button>
-        {activeGameId && (
-          <span className="text-xs text-muted-foreground">
-            Live game: <code>{activeGameId}</code>
-          </span>
-        )}
-      </div>
+    <div className="px-3 py-2 border-b border-black/10 bg-background">
+      <Card className="border-black/10 shadow-sm">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">
+              Run Management
+            </span>
+            {running ? (
+              <Badge variant="outline" className="text-[10px]">Active: {running.game_id}</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px]">Idle</Badge>
+            )}
+            {activeGameId && (
+              <span className="text-xs text-muted-foreground">
+                Stream: <code>{activeGameId}</code>
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "full" | "quick")}
+              className="h-9 rounded border border-black/20 px-2 text-sm bg-white"
+            >
+              <option value="quick">Quick Run (10 rounds cap)</option>
+              <option value="full">Full Run</option>
+            </select>
+            <Button size="sm" onClick={() => onStart(mode)} disabled={loading || Boolean(running)}>
+              Start Game
+            </Button>
+            <Button size="sm" variant="outline" onClick={onRefresh} disabled={loading}>
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => running && onCancel(running.game_id)}
+              disabled={!running}
+            >
+              Cancel Active
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs px-1">
+        <span className="text-muted-foreground mr-1">Recent:</span>
         {games.slice(0, 8).map((game) => (
           <Link
             key={game.game_id}
             href={`/replay?gameId=${encodeURIComponent(game.game_id)}`}
-            className="rounded border border-black/15 px-2 py-1 hover:bg-black/5"
+            className="rounded border border-black/15 px-2 py-1 hover:bg-black/5 bg-white"
           >
             {game.game_id} · {game.status}
           </Link>

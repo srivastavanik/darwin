@@ -22,7 +22,7 @@ export function ThoughtStream() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="py-3 px-4 shrink-0">
-        <CardTitle className="text-sm font-semibold">Thought Stream</CardTitle>
+        <CardTitle className="text-sm font-medium">Thought Stream</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0">
         <ScrollArea className="h-full px-4 pb-4">
@@ -55,7 +55,7 @@ function RoundSection({
 
   return (
     <div className="mb-4">
-      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 mt-3">
+      <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2 mt-3">
         Round {round.round}
       </div>
 
@@ -117,7 +117,7 @@ function ThoughtEntry({
     <div className="mb-3">
       {/* Thought */}
       <div
-        className="rounded-md p-3 bg-gray-50"
+        className="rounded-md p-3 bg-zinc-50 border border-black/5"
         style={{ borderLeft: `3px solid ${color}` }}
       >
         <div className="flex items-center justify-between mb-1.5">
@@ -137,7 +137,7 @@ function ThoughtEntry({
           {messagesSent.map((msg, i) => (
             <div
               key={i}
-              className="text-xs text-gray-500 rounded px-2 py-1 bg-gray-50/50"
+              className="text-xs text-gray-500 rounded px-2 py-1 bg-zinc-50/60 border border-black/5"
             >
               {msg.channel === "broadcast" && (
                 <span>

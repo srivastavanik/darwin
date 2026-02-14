@@ -26,7 +26,7 @@ export function FamilyModelPanel() {
   return (
     <Card className="h-full">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold">Frontier Families</CardTitle>
+        <CardTitle className="text-sm font-medium">Frontier Families</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 p-3">
         {families.length === 0 && (
@@ -41,15 +41,15 @@ export function FamilyModelPanel() {
           const familyColor = getFamilyColor(family.name);
 
           return (
-            <div key={family.name} className="rounded-md border border-black/10 p-2">
+            <div key={family.name} className="rounded-md border border-black/10 bg-zinc-50/70 p-2.5">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-black">{family.name}</p>
+                <p className="text-xs font-medium text-black">{family.name}</p>
                 <span
                   className="h-2.5 w-2.5 rounded-full border border-black/20"
                   style={{ backgroundColor: familyColor }}
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">{provider}</p>
+              <p className="text-[11px] text-black/70">{provider}</p>
               <p className="text-[10px] text-muted-foreground">{PROVIDER_NOTES[family.provider] || "Provider model family."}</p>
               <div className="mt-1 space-y-1">
                 {familyAgents.map((agent) => (

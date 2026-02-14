@@ -31,7 +31,7 @@ export function GameGrid() {
     ctx.fillRect(0, 0, totalSize, totalSize);
 
     // Grid lines
-    ctx.strokeStyle = "#111111";
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.35)";
     ctx.lineWidth = 1;
     for (let i = 0; i <= gridSize; i++) {
       const x = PADDING + i * CELL_SIZE;
@@ -48,7 +48,7 @@ export function GameGrid() {
     }
 
     // Row/col labels
-    ctx.fillStyle = "#111111";
+    ctx.fillStyle = "#52525B";
     ctx.font = "11px Inter, sans-serif";
     ctx.textAlign = "center";
     for (let i = 0; i < gridSize; i++) {
@@ -160,7 +160,7 @@ export function GameGrid() {
   return (
     <Card className="h-full">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold">Grid</CardTitle>
+        <CardTitle className="text-sm font-medium">Grid</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center p-2">
         <canvas
