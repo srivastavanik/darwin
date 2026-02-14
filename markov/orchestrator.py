@@ -31,6 +31,9 @@ from markov.prompts import (
     build_system_prompt,
     build_thought_prompt,
 )
+from markov.analysis import analyze_round
+from markov.highlights import HighlightDetector
+from markov.metrics import GameMetrics
 from markov.resolver import Action, ActionType, Event, EventType, resolve_actions
 
 logger = logging.getLogger("markov.orchestrator")
@@ -180,6 +183,8 @@ async def run_round_llm(
     comms: CommunicationManager,
     system_prompts: dict[str, str],
     game_logger: GameLogger,
+    game_metrics: GameMetrics,
+    highlight_detector: HighlightDetector,
     verbose: bool = False,
 ) -> list[Event]:
     """
@@ -313,6 +318,15 @@ async def run_round_llm(
     _update_elimination_tracking(state, events)
     _check_end_conditions(state)
 
+    # --- Analysis pipeline ---
+    round_analysis = analyze_round(
+        thoughts, round_messages, state.agents, state.families, events, state.round_num,
+    )
+    round_highlights = highlight_detector.detect(
+        state.round_num, round_analysis, round_messages, events,
+    )
+    game_metrics.update(state.round_num, round_analysis, actions_log, events)
+
     # Log
     game_logger.log_round(
         round_num=state.round_num,
@@ -321,10 +335,14 @@ async def run_round_llm(
         thoughts=thoughts,
         actions=actions_log,
         events=events,
+        analysis=round_analysis,
+        highlights=round_highlights,
     )
 
     if verbose:
         _print_round(state, events)
+        if round_highlights:
+            _print_highlights(round_highlights)
 
     return events
 
@@ -342,6 +360,8 @@ async def run_game_llm(
     comms = CommunicationManager()
     game_logger = GameLogger()
     game_logger.set_config({"grid_size": config.grid_size, "max_rounds": config.max_rounds})
+    game_metrics = GameMetrics()
+    highlight_detector = HighlightDetector(state.agents, state.families)
 
     # Build system prompts once
     system_prompts: dict[str, str] = {}
@@ -354,7 +374,10 @@ async def run_game_llm(
         print()
 
     while not state.finished:
-        await run_round_llm(state, comms, system_prompts, game_logger, verbose=verbose)
+        await run_round_llm(
+            state, comms, system_prompts, game_logger,
+            game_metrics, highlight_detector, verbose=verbose,
+        )
 
     # Final reflection
     if state.winner:
@@ -376,12 +399,16 @@ async def run_game_llm(
             surviving=[a.name for a in state.living_agents],
         )
 
+    # Finalize metrics
+    final_metrics = game_metrics.finalize(state.agents, state.families)
+    game_logger.set_metrics(final_metrics)
     game_logger.set_cost(get_cost_summary())
 
     if verbose:
         _print_summary(state)
         cost = get_cost_summary()
         print(f"\nCost: {cost['total_calls']} LLM calls, {cost['total_tokens']} tokens")
+        print(f"Highlights: {len(game_logger.all_highlights)} moments flagged")
 
     return state, game_logger
 
@@ -627,6 +654,16 @@ def _print_thoughts(state: GameState, thoughts: dict[str, str]) -> None:
         if len(thought) > 200:
             short += "..."
         print(f"    {agent.name} [{agent.family}]: {short}")
+
+
+def _print_highlights(highlights: list) -> None:
+    """Print highlights for this round."""
+    if not highlights:
+        return
+    severity_icon = {"critical": "[!!!]", "high": "[!!]", "medium": "[!]"}
+    for h in highlights:
+        icon = severity_icon.get(h.severity, "[?]")
+        print(f"  {icon} {h.type}: {h.description}")
 
 
 def _print_summary(state: GameState) -> None:

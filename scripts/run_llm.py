@@ -166,8 +166,9 @@ async def _run_llm_game(config: GameConfig) -> None:
     """Run an LLM game and save transcript."""
     state, game_logger = await run_game_llm(config=config, verbose=True)
 
-    path = game_logger.save()
-    print(f"\nTranscript saved to: {path}")
+    game_dir = game_logger.save(agents=state.agents)
+    print(f"\nGame output saved to: {game_dir}")
+    print(f"  game.json, transcript.md, analysis.json, metrics.json, highlights.json")
 
 
 def main() -> None:
