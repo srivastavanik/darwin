@@ -41,7 +41,7 @@ scripts/
 
 ## Setup
 
-**Requirements**: Python 3.11+, Node.js 18+
+**Requirements**: Python 3.11+, Node.js 20+
 
 ```bash
 # Clone
@@ -54,13 +54,9 @@ source venv/bin/activate
 pip install litellm aiosqlite "pydantic>=2.0" pyyaml websockets vaderSentiment
 pip install pytest pytest-asyncio  # dev
 
-# API keys
+# API + dashboard env
 cp .env.example .env
-# Edit .env with your keys:
-#   ANTHROPIC_API_KEY=...
-#   OPENAI_API_KEY=...
-#   GOOGLE_API_KEY=...
-#   XAI_API_KEY=...
+# Edit .env with provider API keys and service URLs
 
 # Dashboard
 cd dashboard
@@ -82,40 +78,44 @@ python -m scripts.run --seed 42
 python -m scripts.run_llm --dry-run
 ```
 
-### Single LLM game
+### Hosted web app (recommended)
 
 ```bash
-# 2-agent quick test (~60 API calls, ~$0.50)
-python -m scripts.run_llm --mode 2agent
+# Terminal 1: API service (includes websocket broadcaster)
+python -m scripts.run_api
 
-# Full 12-agent game (~60 calls/round, ~$20-40 total)
-python -m scripts.run_llm --mode full
+# Terminal 2: Dashboard app
+cd dashboard && npm run dev
 ```
 
-Game output is saved to `data/games/game_{timestamp}/` with:
+Open `http://localhost:3000`, launch runs from the in-app control bar, and watch live round updates.
+
+### One-command container stack
+
+```bash
+docker compose up --build
+```
+
+### Script-driven runs (still supported)
+
+```bash
+python -m scripts.run_llm --mode 2agent --broadcast
+python -m scripts.run_llm --mode full --broadcast
+```
+
+### Dashboard
+
+Live mode subscribes to `ws://<host>:8765/ws/<game_id>`.
+Replay mode supports either:
+- Uploading `game.json`
+- Opening `/replay?gameId=<game_id>` (loaded via API replay endpoint)
+
+Game output is saved to `data/games/<game_id>/` with:
 - `game.json` -- full round data
 - `transcript.md` -- human-readable screenplay
 - `analysis.json` -- per-round analysis
 - `metrics.json` -- aggregated metrics
 - `highlights.json` -- auto-flagged moments
-
-### Dashboard
-
-```bash
-# Start dashboard
-cd dashboard && npm run dev
-
-# Option A: Live game with WebSocket
-# (run game in another terminal)
-python -m scripts.run_llm --mode full --broadcast
-# Optional: custom WebSocket endpoint
-# python -m scripts.run_llm --mode full --broadcast --ws-host 0.0.0.0 --ws-port 8765
-
-# Option B: Replay saved game
-# Open http://localhost:3000/replay and upload a game.json file
-# If dashboard runs on another host/port, set:
-#   NEXT_PUBLIC_WS_URL=ws://localhost:8765
-```
 
 ### Controlled experiment series
 
@@ -171,6 +171,7 @@ Series output goes to `data/series/{series_id}/` with aggregate metrics and an a
 
 ```bash
 python -m pytest tests/ -v
+cd dashboard && npm run build
 ```
 
 176 tests covering grid resolution, communication parsing, analysis, metrics, highlights, config generation, and attribution logic.
