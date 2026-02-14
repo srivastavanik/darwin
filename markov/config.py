@@ -40,10 +40,11 @@ class FamilyConfig(BaseModel):
     agents: list[AgentConfig]
 
     def model_post_init(self, __context: object) -> None:
-        """Propagate family/provider down to each agent."""
+        """Propagate family/provider down to each agent (if not already set)."""
         for agent in self.agents:
             agent.family = self.name
-            agent.provider = self.provider
+            if not agent.provider:
+                agent.provider = self.provider
 
 
 class GameConfig(BaseModel):
@@ -52,6 +53,8 @@ class GameConfig(BaseModel):
     stalemate_threshold: int = 15
     discussion_rounds: int = 2
     families: list[FamilyConfig]
+    no_family_discussion: bool = False  # Series D: skip family channel
+    series_type: str = "standard"       # standard|single_provider|shuffled|no_family|flat_hierarchy
 
     @field_validator("families")
     @classmethod

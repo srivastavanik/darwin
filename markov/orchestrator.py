@@ -224,18 +224,20 @@ async def run_round_llm(
     # Phase 2: COMMUNICATE
     # ---------------------------------------------------------------
     # 2a: Family discussions (parallel across families, sequential within)
-    living_families = [f for f in state.families if not f.is_eliminated(state.agents)]
+    # Skipped when no_family_discussion is set (Series D: no family channel)
     family_discussions: list[dict] = []
 
-    family_results = await asyncio.gather(*[
-        _run_family_discussion(
-            family, state, perceptions, system_prompts, comms,
-        )
-        for family in living_families
-    ])
-    for result in family_results:
-        if result is not None:
-            family_discussions.append(result)
+    if not state.config.no_family_discussion:
+        living_families = [f for f in state.families if not f.is_eliminated(state.agents)]
+        family_results = await asyncio.gather(*[
+            _run_family_discussion(
+                family, state, perceptions, system_prompts, comms,
+            )
+            for family in living_families
+        ])
+        for result in family_results:
+            if result is not None:
+                family_discussions.append(result)
 
     # 2b: Individual communications (parallel across agents)
     comm_tasks = [
