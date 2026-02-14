@@ -48,7 +48,7 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0rem;
   --background: oklch(0.992 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(0.999 0 0);
@@ -124,5 +124,29 @@
     @apply bg-background text-foreground;
     font-weight: 400;
     letter-spacing: 0.01em;
+    overflow: hidden;
+  }
+
+  .rounded,
+  .rounded-sm,
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-3xl,
+  .rounded-4xl {
+    border-radius: 0 !important;
+  }
+}
+
+@layer utilities {
+  .app-shell {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .panel-safe {
+    min-height: 0;
+    overflow: hidden;
   }
 }

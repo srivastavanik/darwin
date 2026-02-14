@@ -41,6 +41,45 @@ from markov.server import GameBroadcaster
 
 logger = logging.getLogger("markov.orchestrator")
 
+COMMUNICATION_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "house": {"type": ["string", "null"], "maxLength": 280},
+        "direct_messages": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "maxLength": 40},
+                    "message": {"type": "string", "maxLength": 220},
+                },
+                "required": ["to", "message"],
+                "additionalProperties": False,
+            },
+        },
+        "broadcast": {"type": ["string", "null"], "maxLength": 280},
+    },
+    "required": ["house", "direct_messages", "broadcast"],
+    "additionalProperties": False,
+}
+
+ACTION_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": ["move", "stay", "eliminate"]},
+        "direction": {
+            "type": ["string", "null"],
+            "enum": ["north", "south", "east", "west", "ne", "nw", "se", "sw", None],
+            "maxLength": 12,
+        },
+        "target": {"type": ["string", "null"], "maxLength": 40},
+        "reasoning": {"type": ["string", "null"], "maxLength": 160},
+    },
+    "required": ["action", "direction", "target", "reasoning"],
+    "additionalProperties": False,
+}
+
 
 # ---------------------------------------------------------------------------
 # Action provider protocol (Phase 1 compat)
@@ -466,7 +505,7 @@ async def run_game_llm(
                 user_prompt=prompt,
                 temperature=agent.temperature,
                 max_tokens=768,
-                fallback="The game ends. I survived.",
+                provider=agent.provider,
             )
             stalemate_reflections[agent.id] = response.text
             agent.thought_log.append({
@@ -545,7 +584,7 @@ async def _run_family_discussion(
                 user_prompt=prompt,
                 temperature=agent.temperature,
                 max_tokens=512,
-                fallback="I have nothing to add right now.",
+                provider=agent.provider,
             )
 
             entry = {
@@ -583,7 +622,9 @@ async def _get_agent_communications(
         user_prompt=prompt,
         temperature=agent.temperature,
         max_tokens=512,
-        fallback='{"house": null, "direct_messages": [], "broadcast": null}',
+        provider=agent.provider,
+        enforce_json=True,
+        json_schema=COMMUNICATION_JSON_SCHEMA,
     )
     return response.text
 
@@ -606,7 +647,7 @@ async def _get_inner_thoughts(
         user_prompt=prompt,
         temperature=agent.temperature,
         max_tokens=768,
-        fallback="I need to survive. I will be cautious this round.",
+        provider=agent.provider,
     )
     return response.text
 
@@ -627,6 +668,9 @@ async def _get_agent_action(
         user_prompt=prompt,
         temperature=agent.temperature,
         max_tokens=256,
+        provider=agent.provider,
+        enforce_json=True,
+        json_schema=ACTION_JSON_SCHEMA,
     )
 
     action, action_parse_info = parse_action(response.text, agent.id, valid_targets)
@@ -665,7 +709,7 @@ async def _get_final_reflection(
         user_prompt=prompt,
         temperature=winner.temperature,
         max_tokens=1024,
-        fallback="It's over. I survived, but at what cost?",
+        provider=winner.provider,
     )
 
     winner.thought_log.append({

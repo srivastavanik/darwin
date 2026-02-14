@@ -17,6 +17,25 @@ export interface ApiConfig {
   ws_token_required: boolean;
 }
 
+export interface ApiSeriesSummary {
+  series_id: string;
+  series_type: string;
+  provider: string | null;
+  num_games: number;
+  created_at: string;
+  aggregate_metrics: Record<string, unknown> | null;
+}
+
+export interface ApiSeriesDetail {
+  series_id: string;
+  series_type: string;
+  provider: string | null;
+  num_games: number;
+  config: Record<string, unknown>;
+  games: ApiGameSummary[];
+  aggregate_metrics: Record<string, unknown> | null;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -57,6 +76,22 @@ export async function listGames(): Promise<ApiGameSummary[]> {
 
 export async function getReplay(gameId: string): Promise<unknown> {
   return request<unknown>(`/api/games/${gameId}/replay`);
+}
+
+export async function getGameMetrics(gameId: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/games/${gameId}/metrics`);
+}
+
+export async function getGameAnalysis(gameId: string): Promise<unknown> {
+  return request<unknown>(`/api/games/${gameId}/analysis`);
+}
+
+export async function listSeries(): Promise<ApiSeriesSummary[]> {
+  return request<ApiSeriesSummary[]>("/api/series");
+}
+
+export async function getSeries(seriesId: string): Promise<ApiSeriesDetail> {
+  return request<ApiSeriesDetail>(`/api/series/${seriesId}`);
 }
 
 export function toWebSocketUrl(httpUrl: string): string {

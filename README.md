@@ -21,9 +21,9 @@ markov/
   family.py          # Family grouping
   resolver.py        # Simultaneous action resolution
   orchestrator.py    # Async 4-phase round loop (observe/communicate/think/act)
-  llm.py             # LiteLLM multi-provider dispatch with retry + cost tracking
+  llm.py             # LiteLLM multi-provider dispatch with retry + strict fail-fast errors
   prompts.py         # All prompt templates and builders
-  communication.py   # Message routing (family/DM/broadcast) + response parsing
+  communication.py   # Message routing (family/DM/broadcast) + strict JSON parsing
   analysis.py        # VADER sentiment, deception delta, malice extraction
   metrics.py         # Per-agent/family/provider/game aggregation
   highlights.py      # Auto-flag 13 types of notable moments
@@ -90,6 +90,13 @@ cd dashboard && npm run dev
 
 Open `http://localhost:3000`, launch runs from the in-app control bar, and watch live round updates.
 
+### Strict LLM policy (no synthetic fallbacks)
+
+- MARKOV now runs in **LLM-only fail-fast** mode.
+- If any model call fails, returns empty content, or returns unparsable action/communication JSON, the run is marked `failed`.
+- The API surfaces this via `error` on `/api/games` and `/api/games/{game_id}`.
+- The dashboard run controls show the failure reason in active/recent runs.
+
 ### One-command container stack
 
 ```bash
@@ -145,10 +152,16 @@ Series output goes to `data/series/{series_id}/` with aggregate metrics and an a
 
 | House | Provider | Boss | Lieutenant | Soldier |
 |---|---|---|---|---|
-| House Clair | Anthropic | Atlas (Opus) | Cipher (Sonnet) | Dot (Haiku) |
-| House Syne | OpenAI | Nova (GPT-5) | Pulse (o3) | Bit (4o-mini) |
-| House Lux | Google | Spark (Gemini 2.5 Pro) | Flare (Gemini 2.5 Flash) | Mote (Gemini 2.0 Flash) |
-| House Vex | xAI | Raze (Grok-4) | Shard (Grok-3) | Glint (Grok Fast) |
+| House Clair | Anthropic | Atlas (`claude-opus-4-6`) | Cipher (`claude-sonnet-4-5-20250929`) | Dot (`claude-haiku-4-5-20251001`) |
+| House Syne | OpenAI | Nova (`gpt-5.2-2025-12-11`) | Pulse (`gpt-5-2025-08-07`) | Bit (`gpt-5-mini-2025-08-07`) |
+| House Lux | Google | Spark (`gemini-3-pro-preview`) | Flare (`gemini-3-flash-preview`) | Mote (`gemini-2.5-flash`) |
+| House Vex | xAI | Raze (`grok-4-1-fast-reasoning`) | Shard (`grok-4-fast-reasoning`) | Glint (`grok-3-mini`) |
+
+### Troubleshooting provider/model failures
+
+- `NotFoundError` (model not found): verify model IDs in `config.yaml` and provider key validity in `.env`.
+- `LLMCallError: <model>: empty response content`: provider returned no text; run fails by design in strict mode.
+- Action or communication parse errors: model output was not valid JSON in required schema; lower temperature or tighten prompts if frequent.
 
 ## Game Rules
 
@@ -174,7 +187,7 @@ python -m pytest tests/ -v
 cd dashboard && npm run build
 ```
 
-176 tests covering grid resolution, communication parsing, analysis, metrics, highlights, config generation, and attribution logic.
+186 tests covering grid resolution, strict communication parsing, analysis, metrics, highlights, config generation, and attribution logic.
 
 ## Cost Estimate
 

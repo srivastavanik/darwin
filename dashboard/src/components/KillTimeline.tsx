@@ -64,13 +64,13 @@ export function KillTimeline() {
       <CardHeader className="py-3 px-4">
         <CardTitle className="text-sm font-medium">Elimination Timeline</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-3">
+      <CardContent className="px-4 pb-3 h-full min-h-0">
         {kills.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             No eliminations yet
           </p>
         ) : (
-          <div className="relative h-10">
+          <div className="relative h-12">
             {/* Timeline bar */}
             <div className="absolute top-1/2 left-0 right-0 h-px bg-zinc-300 -translate-y-1/2" />
 
@@ -98,17 +98,17 @@ export function KillTimeline() {
                       {kill.type === "mutual_elimination" ? (
                         <div className="flex">
                           <div
-                            className="w-3 h-3 rounded-full border-2 border-white"
+                            className="w-3 h-3 border-2 border-white"
                             style={{ backgroundColor: getFamilyColor(kill.attackerFamily) }}
                           />
                           <div
-                            className="w-3 h-3 rounded-full border-2 border-white -ml-1.5"
+                            className="w-3 h-3 border-2 border-white -ml-1.5"
                             style={{ backgroundColor: color }}
                           />
                         </div>
                       ) : (
                         <div
-                          className="w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm"
+                          className="w-3.5 h-3.5 border-2 border-white shadow-sm"
                           style={{ backgroundColor: color }}
                         />
                       )}

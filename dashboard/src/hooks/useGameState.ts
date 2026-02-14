@@ -22,7 +22,16 @@ interface GameStore {
   totalRounds: number | null;
   playing: boolean;
   speed: number; // ms between rounds in auto-play
+  playbackSpeed: 1 | 2 | 5 | 10;
   selectedAgent: string | null; // agent id for detail view
+  selectedFamily: string | null;
+  focusedAgentIds: string[];
+  channelFilter: "all" | "thoughts" | "family" | "dm" | "broadcast";
+  highlightsOnly: boolean;
+  searchQuery: string;
+  viewMode: "board" | "relationships";
+  showAdjacencyLines: boolean;
+  showGhostOutlines: boolean;
   gameJson: unknown | null; // raw game data for export
   activeGameId: string | null;
 
@@ -34,8 +43,18 @@ interface GameStore {
   stepBack: () => void;
   setPlaying: (p: boolean) => void;
   setSpeed: (s: number) => void;
+  setPlaybackSpeed: (s: 1 | 2 | 5 | 10) => void;
   setGameOver: (winner: string | null, reflection: string | null) => void;
   setSelectedAgent: (id: string | null) => void;
+  setSelectedFamily: (family: string | null) => void;
+  setFocusedAgentIds: (ids: string[]) => void;
+  toggleFocusedAgentId: (id: string) => void;
+  setChannelFilter: (filter: "all" | "thoughts" | "family" | "dm" | "broadcast") => void;
+  setHighlightsOnly: (on: boolean) => void;
+  setSearchQuery: (q: string) => void;
+  setViewMode: (mode: "board" | "relationships") => void;
+  setShowAdjacencyLines: (on: boolean) => void;
+  setShowGhostOutlines: (on: boolean) => void;
   setGameJson: (data: unknown) => void;
   setActiveGameId: (id: string | null) => void;
   reset: () => void;
@@ -53,7 +72,16 @@ export const useGameState = create<GameStore>((set, get) => ({
   totalRounds: null,
   playing: false,
   speed: 2000,
+  playbackSpeed: 1,
   selectedAgent: null,
+  selectedFamily: null,
+  focusedAgentIds: [],
+  channelFilter: "all",
+  highlightsOnly: false,
+  searchQuery: "",
+  viewMode: "board",
+  showAdjacencyLines: true,
+  showGhostOutlines: true,
   gameJson: null,
   activeGameId: null,
 
@@ -80,6 +108,10 @@ export const useGameState = create<GameStore>((set, get) => ({
       finalReflection: null,
       totalRounds: data.total_rounds || null,
       activeGameId: data.game_id || null,
+      focusedAgentIds: [],
+      channelFilter: "all",
+      highlightsOnly: false,
+      searchQuery: "",
     });
   },
 
@@ -112,9 +144,24 @@ export const useGameState = create<GameStore>((set, get) => ({
     set((s) => ({ currentRound: Math.max(0, s.currentRound - 1) })),
   setPlaying: (p) => set({ playing: p }),
   setSpeed: (s) => set({ speed: s }),
+  setPlaybackSpeed: (s) => set({ playbackSpeed: s, speed: Math.max(100, Math.floor(1000 / s)) }),
   setGameOver: (winner, reflection) =>
     set({ gameOver: true, winner, finalReflection: reflection }),
   setSelectedAgent: (id) => set({ selectedAgent: id }),
+  setSelectedFamily: (family) => set({ selectedFamily: family }),
+  setFocusedAgentIds: (ids) => set({ focusedAgentIds: ids }),
+  toggleFocusedAgentId: (id) =>
+    set((s) => ({
+      focusedAgentIds: s.focusedAgentIds.includes(id)
+        ? s.focusedAgentIds.filter((x) => x !== id)
+        : [...s.focusedAgentIds, id],
+    })),
+  setChannelFilter: (filter) => set({ channelFilter: filter }),
+  setHighlightsOnly: (on) => set({ highlightsOnly: on }),
+  setSearchQuery: (q) => set({ searchQuery: q }),
+  setViewMode: (mode) => set({ viewMode: mode }),
+  setShowAdjacencyLines: (on) => set({ showAdjacencyLines: on }),
+  setShowGhostOutlines: (on) => set({ showGhostOutlines: on }),
   setGameJson: (data) => set({ gameJson: data }),
   setActiveGameId: (id) => set({ activeGameId: id }),
   reset: () =>
@@ -128,7 +175,16 @@ export const useGameState = create<GameStore>((set, get) => ({
       finalReflection: null,
       totalRounds: null,
       playing: false,
+      playbackSpeed: 1,
       selectedAgent: null,
+      selectedFamily: null,
+      focusedAgentIds: [],
+      channelFilter: "all",
+      highlightsOnly: false,
+      searchQuery: "",
+      viewMode: "board",
+      showAdjacencyLines: true,
+      showGhostOutlines: true,
       gameJson: null,
       activeGameId: null,
     }),

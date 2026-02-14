@@ -21,6 +21,8 @@ export function useWebSocket({
 }: UseWebSocketOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const queuedRounds = useRef<RoundData[]>([]);
+  const rafRef = useRef<number | null>(null);
   const [status, setStatus] = useState<WebSocketStatus>("connecting");
   const { initGame, pushRound, setGameOver } = useGameState();
 
@@ -54,7 +56,17 @@ export function useWebSocket({
         if (data.type === "game_init") {
           initGame(data as GameInitData);
         } else if (data.type === "round_update") {
-          pushRound(data as RoundData);
+          queuedRounds.current.push(data as RoundData);
+          if (rafRef.current === null) {
+            rafRef.current = requestAnimationFrame(() => {
+              const batch = [...queuedRounds.current];
+              queuedRounds.current = [];
+              rafRef.current = null;
+              for (const round of batch) {
+                pushRound(round);
+              }
+            });
+          }
         } else if (data.type === "game_over") {
           const go = data as GameOverData;
           setGameOver(go.winner, go.final_reflection);
@@ -85,6 +97,11 @@ export function useWebSocket({
     connect();
     return () => {
       clearTimeout(reconnectTimer.current);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      queuedRounds.current = [];
       wsRef.current?.close();
       setStatus("disconnected");
     };

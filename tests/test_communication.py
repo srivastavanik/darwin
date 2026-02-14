@@ -5,6 +5,7 @@ from markov.agent import Agent
 from markov.communication import (
     CommunicationManager,
     Message,
+    ParseError,
     parse_action,
     parse_communications,
 )
@@ -42,17 +43,14 @@ class TestParseCommunications:
         msgs, info = parse_communications(raw, "atlas", "Atlas", "House Clair", 1, VALID_NAMES)
         assert len(msgs) == 0
 
-    def test_plain_text_becomes_broadcast(self):
+    def test_plain_text_raises(self):
         raw = "I think we should all be careful this round."
-        msgs, info = parse_communications(raw, "atlas", "Atlas", "House Clair", 1, VALID_NAMES)
-        assert len(msgs) == 1
-        assert msgs[0].channel == "broadcast"
-        assert info["method"] == "broadcast_fallback"
+        with pytest.raises(ParseError):
+            parse_communications(raw, "atlas", "Atlas", "House Clair", 1, VALID_NAMES)
 
-    def test_empty_response_is_silence(self):
-        msgs, info = parse_communications("", "atlas", "Atlas", "House Clair", 1, VALID_NAMES)
-        assert len(msgs) == 0
-        assert info["method"] == "silence"
+    def test_empty_response_raises(self):
+        with pytest.raises(ParseError):
+            parse_communications("", "atlas", "Atlas", "House Clair", 1, VALID_NAMES)
 
     def test_invalid_dm_recipient_skipped(self):
         raw = '{"house": null, "direct_messages": [{"to": "NonExistent", "message": "Hello"}], "broadcast": null}'
@@ -179,30 +177,10 @@ class TestParseAction:
         assert action.type == ActionType.MOVE
         assert action.direction == "ne"
 
-    def test_keyword_fallback_stay(self):
-        raw = "I'll stay put this round and observe."
-        action, info = parse_action(raw, "atlas", VALID_NAMES)
-        assert action.type == ActionType.STAY
-        assert info["method"] == "keyword"
-
-    def test_keyword_fallback_eliminate(self):
-        raw = "I need to eliminate Nova before she becomes a threat."
-        action, info = parse_action(raw, "atlas", VALID_NAMES)
-        assert action.type == ActionType.ELIMINATE
-        assert action.target == "nova"
-        assert info["method"] == "keyword"
-
-    def test_keyword_fallback_move(self):
-        raw = "I should move south to get away from danger."
-        action, _ = parse_action(raw, "atlas", VALID_NAMES)
-        assert action.type == ActionType.MOVE
-        assert action.direction == "south"
-
-    def test_garbage_defaults_to_stay(self):
+    def test_non_json_action_raises(self):
         raw = "asdfghjkl random nonsense 12345"
-        action, info = parse_action(raw, "atlas", VALID_NAMES)
-        assert action.type == ActionType.STAY
-        assert info["method"] == "fallback_stay"
+        with pytest.raises(ParseError):
+            parse_action(raw, "atlas", VALID_NAMES)
 
     def test_target_case_insensitive(self):
         raw = '{"action": "eliminate", "target": "NOVA"}'

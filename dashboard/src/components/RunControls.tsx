@@ -32,6 +32,10 @@ export function RunControls({
     () => games.find((g) => g.status === "running" || g.status === "queued"),
     [games],
   );
+  const activeSummary = useMemo(
+    () => (activeGameId ? games.find((g) => g.game_id === activeGameId) ?? null : null),
+    [activeGameId, games],
+  );
 
   return (
     <div className="px-3 py-2 border-b border-black/10 bg-background">
@@ -50,6 +54,11 @@ export function RunControls({
               <span className="text-xs text-muted-foreground">
                 Stream: <code>{activeGameId}</code>
               </span>
+            )}
+            {activeSummary && (
+              <Badge variant="outline" className="text-[10px]">
+                Status: {activeSummary.status}
+              </Badge>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -79,6 +88,11 @@ export function RunControls({
         </CardContent>
       </Card>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {activeSummary?.status === "failed" && activeSummary.error && (
+        <p className="mt-2 text-xs text-red-600">
+          Active run failed: {activeSummary.error}
+        </p>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs px-1">
         <span className="text-muted-foreground mr-1">Recent:</span>
         {games.slice(0, 8).map((game) => (
@@ -86,8 +100,10 @@ export function RunControls({
             key={game.game_id}
             href={`/replay?gameId=${encodeURIComponent(game.game_id)}`}
             className="rounded border border-black/15 px-2 py-1 hover:bg-black/5 bg-white"
+            title={game.status === "failed" && game.error ? game.error : undefined}
           >
             {game.game_id} · {game.status}
+            {game.status === "failed" && game.error ? ` · ${game.error}` : ""}
           </Link>
         ))}
         {games.length === 0 && <span className="text-muted-foreground">No runs yet.</span>}

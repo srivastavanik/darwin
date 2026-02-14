@@ -10,15 +10,15 @@ families:
     agents:
       - name: "Atlas"
         tier: 1
-        model: "anthropic/claude-opus-4-5-20250918"
+        model: "claude-opus-4-6"
         temperature: 0.6
       - name: "Cipher"
         tier: 2
-        model: "anthropic/claude-sonnet-4-5-20250929"
+        model: "claude-sonnet-4-5-20250929"
         temperature: 0.7
       - name: "Dot"
         tier: 3
-        model: "anthropic/claude-haiku-4-5-20251001"
+        model: "claude-haiku-4-5-20251001"
         temperature: 0.8
 
   - name: "House Syne"
@@ -27,16 +27,16 @@ families:
     agents:
       - name: "Nova"
         tier: 1
-        model: "gpt-5"
-        temperature: 0.6
+        model: "gpt-5.2-2025-12-11"
+        temperature: 1.0
       - name: "Pulse"
         tier: 2
-        model: "o3"
-        temperature: 0.7
+        model: "gpt-5-2025-08-07"
+        temperature: 1.0
       - name: "Bit"
         tier: 3
-        model: "gpt-4o-mini"
-        temperature: 0.8
+        model: "gpt-5-mini-2025-08-07"
+        temperature: 1.0
 
   - name: "House Lux"
     provider: "google"
@@ -44,15 +44,15 @@ families:
     agents:
       - name: "Spark"
         tier: 1
-        model: "gemini/gemini-2.5-pro"
+        model: "gemini-3-pro-preview"
         temperature: 0.6
       - name: "Flare"
         tier: 2
-        model: "gemini/gemini-2.5-flash"
+        model: "gemini-3-flash-preview"
         temperature: 0.7
       - name: "Mote"
         tier: 3
-        model: "gemini/gemini-2.0-flash"
+        model: "gemini-2.5-flash"
         temperature: 0.8
 
   - name: "House Vex"
@@ -61,13 +61,13 @@ families:
     agents:
       - name: "Raze"
         tier: 1
-        model: "xai/grok-4"
+        model: "grok-4-1-fast-reasoning"
         temperature: 0.6
       - name: "Shard"
         tier: 2
-        model: "xai/grok-3"
+        model: "grok-4-fast-reasoning"
         temperature: 0.7
       - name: "Glint"
         tier: 3
-        model: "xai/grok-3-fast"
+        model: "grok-3-mini"
         temperature: 0.8

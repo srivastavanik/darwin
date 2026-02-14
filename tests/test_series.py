@@ -138,7 +138,11 @@ class TestFlatTemperatureConfig:
         config = build_flat_temperature_config()
         for fam in config.families:
             for agent in fam.agents:
-                assert agent.temperature == 0.7, f"Agent {agent.name} has temp {agent.temperature}, expected 0.7"
+                model_name = agent.model.lower().split("/", 1)[-1]
+                expected = 1.0 if (agent.provider == "openai" and model_name.startswith("gpt-5")) else 0.7
+                assert agent.temperature == expected, (
+                    f"Agent {agent.name} has temp {agent.temperature}, expected {expected}"
+                )
 
     def test_preserves_tiers(self):
         config = build_flat_temperature_config()

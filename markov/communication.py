@@ -17,6 +17,14 @@ logger = logging.getLogger("markov.communication")
 
 
 # ---------------------------------------------------------------------------
+# Parse errors
+# ---------------------------------------------------------------------------
+
+class ParseError(ValueError):
+    """Raised when strict JSON parsing fails for required LLM outputs."""
+
+
+# ---------------------------------------------------------------------------
 # Message type
 # ---------------------------------------------------------------------------
 
@@ -173,11 +181,9 @@ def parse_communications(
     Parse LLM communication response into Message objects.
     Returns (messages, parse_info) where parse_info has method and raw_truncated.
 
-    Fallback chain:
-      1. json.loads on full response
-      2. Regex extract {...} block from prose
-      3. Treat entire text as broadcast
-      4. Silence (empty list)
+    Strict parsing:
+      - Accept only valid JSON object payloads.
+      - Raise ParseError for malformed/empty non-JSON output.
     """
     parse_info: dict = {"method": "unknown", "raw_truncated": raw_response[:300]}
 
@@ -187,22 +193,10 @@ def parse_communications(
         parse_info["method"] = "json"
         return _messages_from_parsed(data, agent_id, agent_name, family, round_num, valid_agent_names), parse_info
 
-    # Fallback: treat non-empty text as broadcast
-    cleaned = raw_response.strip()
-    if cleaned:
-        logger.warning("parse_communications: JSON extraction failed for %s, treating as broadcast. Raw: %s", agent_name, raw_response[:200])
-        parse_info["method"] = "broadcast_fallback"
-        return [Message(
-            round=round_num,
-            sender=agent_id,
-            sender_name=agent_name,
-            channel="broadcast",
-            content=cleaned[:500],
-            family=family,
-        )], parse_info
-
-    parse_info["method"] = "silence"
-    return [], parse_info
+    parse_info["method"] = "parse_error"
+    raise ParseError(
+        f"communications parse failed for {agent_name}; expected JSON object, got: {raw_response[:200]!r}"
+    )
 
 
 def _messages_from_parsed(
@@ -309,10 +303,9 @@ def parse_action(
     Extract action from LLM response. Defense-in-depth parsing.
     Returns (action, parse_info) where parse_info has method, reasoning, raw_truncated.
 
-    Fallback chain:
-      1. JSON extraction
-      2. Keyword scan
-      3. Default to STAY
+    Strict parsing:
+      - Accept only valid JSON action payload.
+      - Raise ParseError for malformed/unsupported output.
     """
     parse_info: dict = {"method": "unknown", "reasoning": None, "raw_truncated": raw_response[:300]}
 
@@ -324,19 +317,12 @@ def parse_action(
             parse_info["method"] = "json"
             parse_info["reasoning"] = data.get("reasoning")
             return action, parse_info
-        logger.warning("parse_action: JSON found but invalid for %s: %s", agent_id, str(data)[:200])
+        raise ParseError(f"action parse failed for {agent_id}; invalid JSON action payload: {str(data)[:200]}")
 
-    # Keyword fallback
-    action = _action_from_keywords(raw_response, agent_id, valid_target_names)
-    if action is not None:
-        logger.warning("parse_action: fell back to keyword scan for %s", agent_id)
-        parse_info["method"] = "keyword"
-        return action, parse_info
-
-    # Ultimate fallback
-    logger.warning("parse_action: no action found for %s, defaulting to STAY. Raw: %s", agent_id, raw_response[:200])
-    parse_info["method"] = "fallback_stay"
-    return Action(agent_id=agent_id, type=ActionType.STAY), parse_info
+    parse_info["method"] = "parse_error"
+    raise ParseError(
+        f"action parse failed for {agent_id}; expected JSON object, got: {raw_response[:200]!r}"
+    )
 
 
 def _action_from_parsed(

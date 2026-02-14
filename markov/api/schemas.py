@@ -44,3 +44,22 @@ class CancelGameResponse(BaseModel):
     game_id: str
     status: GameStatus
 
+
+class SeriesSummary(BaseModel):
+    series_id: str
+    series_type: str
+    provider: str | None = None
+    num_games: int
+    created_at: datetime
+    aggregate_metrics: dict | None = None
+
+
+class SeriesDetail(BaseModel):
+    series_id: str
+    series_type: str
+    provider: str | None = None
+    num_games: int
+    config: dict = Field(default_factory=dict)
+    games: list[GameSummary] = Field(default_factory=list)
+    aggregate_metrics: dict | None = None
+

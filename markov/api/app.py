@@ -11,6 +11,8 @@ from markov.api.schemas import (
     CancelGameResponse,
     GameSummary,
     HealthResponse,
+    SeriesDetail,
+    SeriesSummary,
     StartGameRequest,
     StartGameResponse,
 )
@@ -107,4 +109,33 @@ async def get_replay(game_id: str) -> dict:
     if payload is None:
         raise HTTPException(status_code=404, detail="Replay not found")
     return payload
+
+
+@app.get("/api/games/{game_id}/metrics")
+async def get_game_metrics(game_id: str) -> dict:
+    payload = _runner().get_metrics_payload(game_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Metrics not found")
+    return payload
+
+
+@app.get("/api/games/{game_id}/analysis")
+async def get_game_analysis(game_id: str) -> dict | list:
+    payload = _runner().get_analysis_payload(game_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return payload
+
+
+@app.get("/api/series", response_model=list[SeriesSummary])
+async def list_series() -> list[SeriesSummary]:
+    return [SeriesSummary(**row) for row in _runner().list_series()]
+
+
+@app.get("/api/series/{series_id}", response_model=SeriesDetail)
+async def get_series(series_id: str) -> SeriesDetail:
+    row = _runner().get_series_detail(series_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Series not found")
+    return SeriesDetail(**row)
 

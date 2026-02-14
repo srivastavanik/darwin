@@ -74,6 +74,7 @@ export function RelationshipWeb() {
 
   useEffect(() => {
     if (!svgRef.current) return;
+    if (document.hidden) return;
 
     const svg = d3.select(svgRef.current);
     const width = 280;
@@ -153,7 +154,10 @@ export function RelationshipWeb() {
       nodeGroups.attr("transform", (d) => `translate(${d.x || 0},${d.y || 0})`);
     });
 
+    const timer = setTimeout(() => sim.stop(), 350);
+
     return () => {
+      clearTimeout(timer);
       sim.stop();
     };
   }, [nodes, links]);

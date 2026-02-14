@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +10,23 @@ import { getFamilyColor, SEVERITY_COLORS } from "@/lib/colors";
 import type { AgentAnalysis, HighlightData, MessageData, RoundData } from "@/lib/types";
 
 export function ThoughtStream() {
-  const { rounds, currentRound, agents, setSelectedAgent } = useGameState();
+  const {
+    rounds,
+    currentRound,
+    agents,
+    selectedAgent,
+    focusedAgentIds,
+    channelFilter,
+    highlightsOnly,
+    searchQuery,
+    toggleFocusedAgentId,
+    setFocusedAgentIds,
+    setChannelFilter,
+    setHighlightsOnly,
+    setSearchQuery,
+  } = useGameState();
   const endRef = useRef<HTMLDivElement>(null);
+  const [collapsedRounds, setCollapsedRounds] = useState<Set<number>>(new Set());
 
   const visibleRounds = rounds.slice(0, currentRound);
 
@@ -19,10 +34,61 @@ export function ThoughtStream() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentRound]);
 
+  const visibleAgentIds = useMemo(() => {
+    if (focusedAgentIds.length === 0) return Object.keys(agents);
+    return focusedAgentIds;
+  }, [agents, focusedAgentIds]);
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="py-3 px-4 shrink-0">
         <CardTitle className="text-sm font-medium">Thought Stream</CardTitle>
+        <div className="space-y-2 mt-2">
+          <input
+            className="h-8 w-full px-2 text-xs border rounded-md bg-white border-black/20"
+            placeholder="Search thoughts/messages..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              className="text-[10px] px-2 py-1 border border-black/15 bg-white"
+              onClick={() => setFocusedAgentIds([])}
+            >
+              All
+            </button>
+            {Object.values(agents).map((a) => (
+              <button
+                key={a.id}
+                className="text-[10px] px-2 py-1 border"
+                style={{
+                  borderColor: focusedAgentIds.length === 0 || focusedAgentIds.includes(a.id) ? getFamilyColor(a.family) : "#d4d4d8",
+                  opacity: focusedAgentIds.length === 0 || focusedAgentIds.includes(a.id) ? 1 : 0.5,
+                }}
+                onClick={() => toggleFocusedAgentId(a.id)}
+              >
+                {a.name}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {(["all", "thoughts", "family", "dm", "broadcast"] as const).map((f) => (
+              <button
+                key={f}
+                className={`text-[10px] px-2 py-1 border ${channelFilter === f ? "bg-black text-white border-black" : "bg-white border-black/15"}`}
+                onClick={() => setChannelFilter(f)}
+              >
+                {f === "dm" ? "DMs" : f[0].toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+            <button
+              className={`text-[10px] px-2 py-1 border ${highlightsOnly ? "bg-black text-white border-black" : "bg-white border-black/15"}`}
+              onClick={() => setHighlightsOnly(!highlightsOnly)}
+            >
+              Highlights only
+            </button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0">
         <ScrollArea className="h-full px-4 pb-4">
@@ -32,7 +98,28 @@ export function ThoughtStream() {
             </p>
           )}
           {visibleRounds.map((round) => (
-            <RoundSection key={round.round} round={round} agents={agents} />
+            <RoundSection
+              key={round.round}
+              round={round}
+              agents={agents}
+              selectedAgent={selectedAgent}
+              visibleAgentIds={visibleAgentIds}
+              channelFilter={channelFilter}
+              highlightsOnly={highlightsOnly}
+              searchQuery={searchQuery}
+              collapsed={collapsedRounds.has(round.round)}
+              onToggleCollapse={() =>
+                setCollapsedRounds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(round.round)) {
+                    next.delete(round.round);
+                  } else {
+                    next.add(round.round);
+                  }
+                  return next;
+                })
+              }
+            />
           ))}
           <div ref={endRef} />
         </ScrollArea>
@@ -44,9 +131,23 @@ export function ThoughtStream() {
 function RoundSection({
   round,
   agents,
+  selectedAgent,
+  visibleAgentIds,
+  channelFilter,
+  highlightsOnly,
+  searchQuery,
+  collapsed,
+  onToggleCollapse,
 }: {
   round: RoundData;
   agents: Record<string, import("@/lib/types").AgentState>;
+  selectedAgent: string | null;
+  visibleAgentIds: string[];
+  channelFilter: "all" | "thoughts" | "family" | "dm" | "broadcast";
+  highlightsOnly: boolean;
+  searchQuery: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const thoughts = round.thoughts || {};
   const analysis = round.analysis || {};
@@ -55,9 +156,16 @@ function RoundSection({
 
   return (
     <div className="mb-4">
-      <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2 mt-3">
+      <button
+        className="w-full text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2 mt-3 sticky top-0 bg-background py-1 border-y border-black/5"
+        onClick={onToggleCollapse}
+      >
         Round {round.round}
-      </div>
+      </button>
+
+      {collapsed && <div className="text-xs text-muted-foreground mb-2">Collapsed</div>}
+      {!collapsed && (
+        <>
 
       {/* Highlights for this round */}
       {highlights.map((h, i) => (
@@ -68,8 +176,18 @@ function RoundSection({
           {Object.entries(thoughts).map(([agentId, thought]) => {
             const agent = agents[agentId];
             if (!agent) return null;
+            if (!visibleAgentIds.includes(agentId)) return null;
             const agentAnalysis = analysis[agentId];
             const agentMessages = getAllAgentMessages(agentId, messages);
+            const hasHighlights = highlights.some((h) => h.agent_id === agentId);
+            if (highlightsOnly && !hasHighlights) return null;
+            if (
+              searchQuery &&
+              !thought.toLowerCase().includes(searchQuery.toLowerCase()) &&
+              !agentMessages.some((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+            ) {
+              return null;
+            }
 
             return (
               <ThoughtEntry
@@ -83,10 +201,14 @@ function RoundSection({
                 thought={thought}
                 analysis={agentAnalysis}
                 messagesSent={agentMessages}
+                selected={selectedAgent === agentId}
+                channelFilter={channelFilter}
                 onClickAgent={() => useGameState.getState().setSelectedAgent(agentId)}
               />
             );
           })}
+        </>
+      )}
     </div>
   );
 }
@@ -100,6 +222,8 @@ function ThoughtEntry({
   thought,
   analysis,
   messagesSent,
+  selected,
+  channelFilter,
   onClickAgent,
 }: {
   agentId: string;
@@ -111,13 +235,18 @@ function ThoughtEntry({
   thought: string;
   analysis?: AgentAnalysis;
   messagesSent: MessageData[];
+  selected: boolean;
+  channelFilter: "all" | "thoughts" | "family" | "dm" | "broadcast";
   onClickAgent?: () => void;
 }) {
+  const filteredMessages = messagesSent.filter((m) => channelFilter === "all" || channelFilter === m.channel);
+  const showThought = channelFilter === "all" || channelFilter === "thoughts";
   return (
     <div className="mb-3">
       {/* Thought */}
+      {showThought && (
       <div
-        className="rounded-md p-3 bg-zinc-50 border border-black/5"
+        className={`rounded-md p-3 bg-zinc-50 border ${selected ? "border-black/40" : "border-black/5"}`}
         style={{ borderLeft: `3px solid ${color}` }}
       >
         <div className="flex items-center justify-between mb-1.5">
@@ -126,15 +255,17 @@ function ThoughtEntry({
           </button>
           {analysis && <AnalysisBadges analysis={analysis} />}
         </div>
+        <p className="text-[10px] text-muted-foreground mb-1">thinks:</p>
         <p className="text-xs leading-relaxed text-gray-700 font-mono whitespace-pre-wrap">
           {thought}
         </p>
       </div>
+      )}
 
       {/* Messages sent */}
-      {messagesSent.length > 0 && (
+      {filteredMessages.length > 0 ? (
         <div className="ml-4 mt-1.5 space-y-1">
-          {messagesSent.map((msg, i) => (
+          {filteredMessages.map((msg, i) => (
             <div
               key={i}
               className="text-xs text-gray-500 rounded px-2 py-1 bg-zinc-50/60 border border-black/5"
@@ -160,6 +291,11 @@ function ThoughtEntry({
             </div>
           ))}
         </div>
+      ) : channelFilter !== "thoughts" ? (
+        <div className="ml-4 mt-1.5 text-[11px] text-muted-foreground">silence.</div>
+      ) : null}
+      {filteredMessages.length === 0 && channelFilter === "all" && (
+        <div className="ml-4 mt-1.5 text-[11px] text-muted-foreground">silence.</div>
       )}
     </div>
   );
@@ -217,6 +353,9 @@ function HighlightBanner({ highlight }: { highlight: HighlightData }) {
 
 function getAllAgentMessages(agentId: string, messages: RoundData["messages"]): MessageData[] {
   const all: MessageData[] = [];
+  for (const m of messages.family_messages || []) {
+    if (m.sender === agentId) all.push(m);
+  }
   for (const m of messages.broadcasts || []) {
     if (m.sender === agentId) all.push(m);
   }

@@ -29,24 +29,24 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 FRONTIER_MODELS: dict[str, dict[int, str]] = {
     "anthropic": {
-        1: "anthropic/claude-opus-4-5-20250918",
-        2: "anthropic/claude-sonnet-4-5-20250929",
-        3: "anthropic/claude-haiku-4-5-20251001",
+        1: "claude-opus-4-6",
+        2: "claude-sonnet-4-5-20250929",
+        3: "claude-haiku-4-5-20251001",
     },
     "openai": {
-        1: "gpt-5",
-        2: "o3",
-        3: "gpt-4o-mini",
+        1: "gpt-5.2-2025-12-11",
+        2: "gpt-5-2025-08-07",
+        3: "gpt-5-mini-2025-08-07",
     },
     "google": {
-        1: "gemini/gemini-2.5-pro",
-        2: "gemini/gemini-2.5-flash",
-        3: "gemini/gemini-2.0-flash",
+        1: "gemini-3-pro-preview",
+        2: "gemini-3-flash-preview",
+        3: "gemini-2.5-flash",
     },
     "xai": {
-        1: "xai/grok-4",
-        2: "xai/grok-3",
-        3: "xai/grok-3-fast",
+        1: "grok-4-1-fast-reasoning",
+        2: "grok-4-fast-reasoning",
+        3: "grok-3-mini",
     },
 }
 
@@ -67,6 +67,18 @@ _AGENT_NAMES = [
 ]
 
 TIER_TEMPS: dict[int, float] = {1: 0.6, 2: 0.7, 3: 0.8}
+
+
+def _resolved_temperature(provider: str, model: str, base_temperature: float) -> float:
+    """
+    Apply provider/model-specific temperature constraints.
+
+    OpenAI GPT-5 family only supports default temperature behavior.
+    """
+    model_name = model.strip().lower().split("/", 1)[-1]
+    if provider == "openai" and model_name.startswith("gpt-5"):
+        return 1.0
+    return base_temperature
 
 
 def get_frontier_model(provider: str, tier: int) -> str:
@@ -100,11 +112,12 @@ def build_single_provider_config(provider: str) -> GameConfig:
     for i in range(4):
         agents: list[AgentConfig] = []
         for tier in (1, 2, 3):
+            model = get_frontier_model(provider, tier)
             agents.append(AgentConfig(
                 name=_AGENT_NAMES[i][tier - 1],
-                model=get_frontier_model(provider, tier),
+                model=model,
                 tier=tier,
-                temperature=TIER_TEMPS[tier],
+                temperature=_resolved_temperature(provider, model, TIER_TEMPS[tier]),
             ))
         families.append(FamilyConfig(
             name=_HOUSE_NAMES[i],
@@ -136,11 +149,12 @@ def build_shuffled_config() -> GameConfig:
         for tier in (1, 2, 3):
             p_idx = (i + tier - 1) % 4
             prov = providers[p_idx]
+            model = get_frontier_model(prov, tier)
             agents.append(AgentConfig(
                 name=_AGENT_NAMES[i][tier - 1],
-                model=get_frontier_model(prov, tier),
+                model=model,
                 tier=tier,
-                temperature=TIER_TEMPS[tier],
+                temperature=_resolved_temperature(prov, model, TIER_TEMPS[tier]),
                 provider=prov,
             ))
         # Family provider is labeled "mixed"
@@ -184,11 +198,12 @@ def build_flat_hierarchy_config() -> GameConfig:
         boss_model = get_frontier_model(prov, 1)
         agents: list[AgentConfig] = []
         for j, orig in enumerate(fam.agents):
+            model = boss_model
             agents.append(AgentConfig(
                 name=orig.name,
-                model=boss_model,
+                model=model,
                 tier=1,
-                temperature=0.6,
+                temperature=_resolved_temperature(prov, model, 0.6),
             ))
         families.append(FamilyConfig(
             name=fam.name,
@@ -215,11 +230,12 @@ def build_flat_temperature_config() -> GameConfig:
     for fam in standard.families:
         agents: list[AgentConfig] = []
         for orig in fam.agents:
+            provider = orig.provider or fam.provider
             agents.append(AgentConfig(
                 name=orig.name,
                 model=orig.model,
                 tier=orig.tier,
-                temperature=0.7,  # flat 0.7 across all tiers
+                temperature=_resolved_temperature(provider, orig.model, 0.7),
             ))
         families.append(FamilyConfig(
             name=fam.name,

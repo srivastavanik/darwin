@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "LLM social survival experiment engine"
 requires-python = ">=3.11"
 dependencies = [
-    "litellm",
+    "anthropic",
+    "openai",
+    "google-genai",
     "aiosqlite",
     "pydantic>=2.0",
     "pyyaml",

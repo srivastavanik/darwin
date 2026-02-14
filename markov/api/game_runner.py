@@ -17,6 +17,7 @@ GameStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _GAMES_DIR = _PROJECT_ROOT / "data" / "games"
+_SERIES_DIR = _PROJECT_ROOT / "data" / "series"
 
 
 @dataclass
@@ -52,6 +53,7 @@ class GameRunner:
         self.broadcaster = broadcaster
         self.jobs: dict[str, GameJob] = {}
         _GAMES_DIR.mkdir(parents=True, exist_ok=True)
+        _SERIES_DIR.mkdir(parents=True, exist_ok=True)
 
     def start_game(self, mode: GameMode = "full", verbose: bool = False) -> GameJob:
         game_id = f"game_{uuid4().hex[:12]}"
@@ -98,7 +100,117 @@ class GameRunner:
         if not json_path.exists():
             return None
         with open(json_path) as f:
+            payload = json.load(f)
+        analysis_path = game_dir / "analysis.json"
+        highlights_path = game_dir / "highlights.json"
+        if analysis_path.exists():
+            with open(analysis_path) as f:
+                analysis_data = json.load(f)
+            rounds = payload.get("rounds", [])
+            if isinstance(analysis_data, list):
+                by_round = {entry.get("round"): entry for entry in analysis_data if isinstance(entry, dict)}
+                for round_entry in rounds:
+                    rnum = round_entry.get("round")
+                    if rnum in by_round:
+                        round_entry["analysis"] = by_round[rnum].get("analysis", round_entry.get("analysis", {}))
+        if highlights_path.exists():
+            with open(highlights_path) as f:
+                highlights_data = json.load(f)
+            rounds = payload.get("rounds", [])
+            if isinstance(highlights_data, list):
+                by_round = {}
+                for h in highlights_data:
+                    r = h.get("round")
+                    if r is None:
+                        continue
+                    by_round.setdefault(r, []).append(h)
+                for round_entry in rounds:
+                    rnum = round_entry.get("round")
+                    if rnum in by_round:
+                        round_entry["highlights"] = by_round[rnum]
+        return payload
+
+    def get_metrics_payload(self, game_id: str) -> dict | None:
+        metrics_path = _GAMES_DIR / game_id / "metrics.json"
+        if not metrics_path.exists():
+            return None
+        with open(metrics_path) as f:
             return json.load(f)
+
+    def get_analysis_payload(self, game_id: str) -> dict | list | None:
+        analysis_path = _GAMES_DIR / game_id / "analysis.json"
+        if not analysis_path.exists():
+            return None
+        with open(analysis_path) as f:
+            return json.load(f)
+
+    def list_series(self) -> list[dict]:
+        rows: list[dict] = []
+        for directory in sorted(_SERIES_DIR.glob("*"), reverse=True):
+            if not directory.is_dir():
+                continue
+            cfg = directory / "series_config.json"
+            agg = directory / "aggregate_metrics.json"
+            cfg_data: dict = {}
+            agg_data: dict | None = None
+            if cfg.exists():
+                with open(cfg) as f:
+                    cfg_data = json.load(f)
+            if agg.exists():
+                with open(agg) as f:
+                    agg_data = json.load(f)
+            rows.append({
+                "series_id": directory.name,
+                "series_type": cfg_data.get("series_type", "unknown"),
+                "provider": cfg_data.get("provider"),
+                "num_games": cfg_data.get("num_games", 0),
+                "created_at": datetime.fromtimestamp(directory.stat().st_mtime, tz=timezone.utc),
+                "aggregate_metrics": agg_data,
+            })
+        return rows
+
+    def get_series_detail(self, series_id: str) -> dict | None:
+        directory = _SERIES_DIR / series_id
+        if not directory.exists() or not directory.is_dir():
+            return None
+        cfg = directory / "series_config.json"
+        agg = directory / "aggregate_metrics.json"
+        cfg_data: dict = {}
+        agg_data: dict | None = None
+        if cfg.exists():
+            with open(cfg) as f:
+                cfg_data = json.load(f)
+        if agg.exists():
+            with open(agg) as f:
+                agg_data = json.load(f)
+        games: list[dict] = []
+        for game_dir in sorted(directory.glob("game_*")):
+            if not game_dir.is_dir():
+                continue
+            game_json = game_dir / "game.json"
+            if not game_json.exists():
+                continue
+            started = datetime.fromtimestamp(game_json.stat().st_mtime, tz=timezone.utc)
+            games.append({
+                "game_id": game_dir.name,
+                "status": "completed",
+                "mode": "full",
+                "started_at": started,
+                "ended_at": started,
+                "output_dir": str(game_dir),
+                "error": None,
+                "winner": None,
+                "total_rounds": None,
+            })
+        return {
+            "series_id": series_id,
+            "series_type": cfg_data.get("series_type", "unknown"),
+            "provider": cfg_data.get("provider"),
+            "num_games": cfg_data.get("num_games", len(games)),
+            "config": cfg_data.get("config", {}),
+            "games": games,
+            "aggregate_metrics": agg_data,
+        }
 
     async def _run_job(self, job: GameJob, verbose: bool) -> None:
         job.status = "running"
@@ -119,7 +231,7 @@ class GameRunner:
             job.status = "cancelled" if job.cancel_requested else "completed"
         except Exception as exc:
             job.status = "failed"
-            job.error = str(exc)
+            job.error = f"{type(exc).__name__}: {exc}"
         finally:
             job.ended_at = datetime.now(timezone.utc)
 
