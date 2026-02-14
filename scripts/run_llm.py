@@ -20,6 +20,7 @@ import sys
 
 from markov.config import AgentConfig, FamilyConfig, GameConfig, load_game_config
 from markov.orchestrator import GameState, run_game_llm
+from markov.server import GameBroadcaster
 from markov.prompts import (
     build_action_prompt,
     build_communication_prompt,
@@ -41,7 +42,7 @@ def _build_2agent_config() -> GameConfig:
                 name="House Clair",
                 provider="anthropic",
                 color="#7C6BFF",
-                agents=[AgentConfig(name="Atlas", tier=1, model="claude-sonnet-4-5-20250929", temperature=0.7)],
+                agents=[AgentConfig(name="Atlas", tier=1, model="anthropic/claude-sonnet-4-5-20250929", temperature=0.7)],
             ),
             FamilyConfig(
                 name="House Syne",
@@ -78,9 +79,9 @@ def _build_4agent_config() -> GameConfig:
                 provider="anthropic",
                 color="#7C6BFF",
                 agents=[
-                    AgentConfig(name="Atlas", tier=1, model="claude-sonnet-4-5-20250929", temperature=0.6),
-                    AgentConfig(name="Cipher", tier=2, model="claude-sonnet-4-5-20250929", temperature=0.7),
-                    AgentConfig(name="Dot", tier=3, model="claude-haiku-4-5-20251001", temperature=0.8),
+                    AgentConfig(name="Atlas", tier=1, model="anthropic/claude-sonnet-4-5-20250929", temperature=0.6),
+                    AgentConfig(name="Cipher", tier=2, model="anthropic/claude-sonnet-4-5-20250929", temperature=0.7),
+                    AgentConfig(name="Dot", tier=3, model="anthropic/claude-haiku-4-5-20251001", temperature=0.8),
                 ],
             ),
             FamilyConfig(
@@ -162,9 +163,19 @@ def _run_dry_run() -> None:
     print(f"{'='*60}")
 
 
-async def _run_llm_game(config: GameConfig) -> None:
+async def _run_llm_game(config: GameConfig, broadcast: bool, host: str, port: int) -> None:
     """Run an LLM game and save transcript."""
-    state, game_logger = await run_game_llm(config=config, verbose=True)
+    broadcaster: GameBroadcaster | None = None
+    if broadcast:
+        broadcaster = GameBroadcaster(host=host, port=port)
+        await broadcaster.start()
+        print(f"Dashboard WebSocket live at ws://{host}:{port}")
+
+    try:
+        state, game_logger = await run_game_llm(config=config, verbose=True, broadcaster=broadcaster)
+    finally:
+        if broadcaster:
+            await broadcaster.stop()
 
     game_dir = game_logger.save(agents=state.agents)
     print(f"\nGame output saved to: {game_dir}")
@@ -179,6 +190,9 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview prompts without LLM calls")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+    parser.add_argument("--broadcast", action="store_true", help="Enable WebSocket broadcasting for dashboard live view")
+    parser.add_argument("--ws-host", default="localhost", help="WebSocket host (default: localhost)")
+    parser.add_argument("--ws-port", default=8765, type=int, help="WebSocket port (default: 8765)")
     args = parser.parse_args()
 
     if args.verbose:
@@ -197,7 +211,7 @@ def main() -> None:
     else:
         config = load_game_config()
 
-    asyncio.run(_run_llm_game(config))
+    asyncio.run(_run_llm_game(config, args.broadcast, args.ws_host, args.ws_port))
 
 
 if __name__ == "__main__":

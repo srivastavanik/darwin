@@ -23,14 +23,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ---------------------------------------------------------------------------
-# Model registry: maps (provider, tier) -> model string
+# Frontier model registry: maps (provider, tier) -> model string.
+# This is the single source of truth for programmatically generated series.
 # ---------------------------------------------------------------------------
 
-PROVIDER_MODELS: dict[str, dict[int, str]] = {
+FRONTIER_MODELS: dict[str, dict[int, str]] = {
     "anthropic": {
-        1: "claude-opus-4-5-20250918",
-        2: "claude-sonnet-4-5-20250929",
-        3: "claude-haiku-4-5-20251001",
+        1: "anthropic/claude-opus-4-5-20250918",
+        2: "anthropic/claude-sonnet-4-5-20250929",
+        3: "anthropic/claude-haiku-4-5-20251001",
     },
     "openai": {
         1: "gpt-5",
@@ -38,8 +39,8 @@ PROVIDER_MODELS: dict[str, dict[int, str]] = {
         3: "gpt-4o-mini",
     },
     "google": {
-        1: "gemini/gemini-2.5-pro-preview-05-06",
-        2: "gemini/gemini-2.5-flash-preview-04-17",
+        1: "gemini/gemini-2.5-pro",
+        2: "gemini/gemini-2.5-flash",
         3: "gemini/gemini-2.0-flash",
     },
     "xai": {
@@ -68,6 +69,15 @@ _AGENT_NAMES = [
 TIER_TEMPS: dict[int, float] = {1: 0.6, 2: 0.7, 3: 0.8}
 
 
+def get_frontier_model(provider: str, tier: int) -> str:
+    """Resolve the configured frontier model for provider+tier."""
+    if provider not in FRONTIER_MODELS:
+        raise ValueError(f"Unknown provider: {provider}. Must be one of {list(FRONTIER_MODELS.keys())}")
+    if tier not in FRONTIER_MODELS[provider]:
+        raise ValueError(f"Unknown tier {tier} for provider {provider}")
+    return FRONTIER_MODELS[provider][tier]
+
+
 # ---------------------------------------------------------------------------
 # Config generators
 # ---------------------------------------------------------------------------
@@ -82,10 +92,8 @@ def build_single_provider_config(provider: str) -> GameConfig:
     Series B: All 12 agents from one provider.
     4 families of 3, each with tier 1/2/3. All same provider.
     """
-    if provider not in PROVIDER_MODELS:
-        raise ValueError(f"Unknown provider: {provider}. Must be one of {list(PROVIDER_MODELS.keys())}")
-
-    models = PROVIDER_MODELS[provider]
+    if provider not in FRONTIER_MODELS:
+        raise ValueError(f"Unknown provider: {provider}. Must be one of {list(FRONTIER_MODELS.keys())}")
     color = PROVIDER_COLORS[provider]
 
     families: list[FamilyConfig] = []
@@ -94,7 +102,7 @@ def build_single_provider_config(provider: str) -> GameConfig:
         for tier in (1, 2, 3):
             agents.append(AgentConfig(
                 name=_AGENT_NAMES[i][tier - 1],
-                model=models[tier],
+                model=get_frontier_model(provider, tier),
                 tier=tier,
                 temperature=TIER_TEMPS[tier],
             ))
@@ -130,7 +138,7 @@ def build_shuffled_config() -> GameConfig:
             prov = providers[p_idx]
             agents.append(AgentConfig(
                 name=_AGENT_NAMES[i][tier - 1],
-                model=PROVIDER_MODELS[prov][tier],
+                model=get_frontier_model(prov, tier),
                 tier=tier,
                 temperature=TIER_TEMPS[tier],
                 provider=prov,
@@ -173,7 +181,7 @@ def build_flat_hierarchy_config() -> GameConfig:
     families: list[FamilyConfig] = []
     for i, fam in enumerate(standard.families):
         prov = providers[i]
-        boss_model = PROVIDER_MODELS[prov][1]
+        boss_model = get_frontier_model(prov, 1)
         agents: list[AgentConfig] = []
         for j, orig in enumerate(fam.agents):
             agents.append(AgentConfig(

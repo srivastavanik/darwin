@@ -99,3 +99,18 @@ class TestCallLLM:
             assert get_cost_summary()["total_calls"] == 1
             reset_costs()
             assert get_cost_summary()["total_calls"] == 0
+
+    @pytest.mark.asyncio
+    async def test_anthropic_model_is_normalized(self):
+        mock_resp = _mock_response("ok")
+        with patch("markov.llm.litellm.acompletion", new_callable=AsyncMock, return_value=mock_resp) as mock_fn:
+            await call_llm("claude-sonnet-4-5-20250929", "s", "u")
+            assert mock_fn.call_count == 1
+            assert mock_fn.call_args.kwargs["model"] == "anthropic/claude-sonnet-4-5-20250929"
+
+    @pytest.mark.asyncio
+    async def test_openai_reasoning_models_force_temperature_one(self):
+        mock_resp = _mock_response("ok")
+        with patch("markov.llm.litellm.acompletion", new_callable=AsyncMock, return_value=mock_resp) as mock_fn:
+            await call_llm("gpt-5", "s", "u", temperature=0.2)
+            assert mock_fn.call_args.kwargs["temperature"] == 1.0

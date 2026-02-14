@@ -19,6 +19,9 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 # Suppress LiteLLM's verbose default logging
 litellm.suppress_debug_info = True
+# Drop params unsupported by specific providers/models (for example,
+# temperature on some OpenAI reasoning models).
+litellm.drop_params = True
 
 logger = logging.getLogger("markov.llm")
 
@@ -93,6 +96,32 @@ def reset_costs() -> None:
 
 _DEFAULT_FALLBACK = '{"action": "stay"}'
 
+_OPENAI_FORCE_TEMP_ONE_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _normalize_model(model: str) -> str:
+    """
+    Normalize model identifiers for LiteLLM provider routing.
+
+    LiteLLM expects provider/model for some providers (for example Anthropic).
+    """
+    if "/" in model:
+        return model
+    lowered = model.lower()
+    if lowered.startswith("claude-"):
+        return f"anthropic/{model}"
+    return model
+
+
+def _normalize_temperature(model: str, temperature: float) -> float:
+    """
+    Adjust temperature for models that only support temperature=1.
+    """
+    base = model.split("/", 1)[-1].lower()
+    if base.startswith(_OPENAI_FORCE_TEMP_ONE_PREFIXES):
+        return 1.0
+    return temperature
+
 
 async def call_llm(
     model: str,
@@ -114,14 +143,16 @@ async def call_llm(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+    resolved_model = _normalize_model(model)
+    resolved_temperature = _normalize_temperature(resolved_model, temperature)
 
     for attempt in range(2):
         try:
             t0 = time.monotonic()
             response = await litellm.acompletion(
-                model=model,
+                model=resolved_model,
                 messages=messages,
-                temperature=temperature,
+                temperature=resolved_temperature,
                 max_tokens=max_tokens,
                 timeout=timeout,
             )
@@ -132,26 +163,35 @@ async def call_llm(
             prompt_tok = usage.prompt_tokens if usage else 0
             completion_tok = usage.completion_tokens if usage else 0
 
-            _costs.record(model, prompt_tok, completion_tok, latency)
-            logger.info("LLM OK: model=%s tokens=%d+%d latency=%dms", model, prompt_tok, completion_tok, latency)
+            _costs.record(resolved_model, prompt_tok, completion_tok, latency)
+            logger.info("LLM OK: model=%s tokens=%d+%d latency=%dms", resolved_model, prompt_tok, completion_tok, latency)
 
             return LLMResponse(
                 text=text,
                 prompt_tokens=prompt_tok,
                 completion_tokens=completion_tok,
-                model=model,
+                model=resolved_model,
                 latency_ms=latency,
             )
         except Exception as e:
             if attempt == 0:
                 wait = 2.0 + random.uniform(0, 1.0)
-                logger.warning("LLM call failed (attempt 1) for %s: %s. Retrying in %.1fs", model, e, wait)
+                logger.warning(
+                    "LLM call failed (attempt 1) for %s: %s. Retrying in %.1fs",
+                    resolved_model,
+                    e,
+                    wait,
+                )
                 await asyncio.sleep(wait)
             else:
-                logger.error("LLM call failed (attempt 2) for %s: %s. Using fallback.", model, e)
+                logger.error(
+                    "LLM call failed (attempt 2) for %s: %s. Using fallback.",
+                    resolved_model,
+                    e,
+                )
                 _costs.record_failure()
-                return LLMResponse(text=fallback, model=model, failed=True)
+                return LLMResponse(text=fallback, model=resolved_model, failed=True)
 
     # Unreachable, but satisfies type checker
     _costs.record_failure()
-    return LLMResponse(text=fallback, model=model, failed=True)
+    return LLMResponse(text=fallback, model=resolved_model, failed=True)
