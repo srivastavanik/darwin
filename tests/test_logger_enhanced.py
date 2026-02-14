@@ -37,6 +37,12 @@ class TestLogRoundWithAnalysis:
         assert len(gl.all_highlights) == 1
         assert gl.all_highlights[0]["type"] == "deception_spike"
 
+    def test_grid_snapshot_stored(self):
+        gl = GameLogger()
+        grid_agents = [{"id": "atlas", "position": [0, 0], "alive": True}]
+        gl.log_round(round_num=1, grid_agents=grid_agents)
+        assert gl.rounds[0]["grid"]["agents"][0]["id"] == "atlas"
+
 
 class TestSaveDirectory:
     def test_creates_all_files(self):

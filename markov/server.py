@@ -89,7 +89,9 @@ class GameBroadcaster:
                     "name": a.name,
                     "family": a.family,
                     "provider": a.provider,
+                    "model": a.model,
                     "tier": a.tier,
+                    "temperature": a.temperature,
                     "position": list(a.position),
                     "alive": a.alive,
                 }
@@ -129,7 +131,10 @@ class GameBroadcaster:
                         "name": a.name,
                         "family": a.family,
                         "color": _get_family_color(a.family, families),
+                        "provider": a.provider,
+                        "model": a.model,
                         "tier": a.tier,
+                        "temperature": a.temperature,
                         "position": list(a.position),
                         "alive": a.alive,
                         "eliminated_by": a.eliminated_by,
@@ -233,7 +238,7 @@ async def serve_replay(
         "type": "game_init",
         "grid_size": config.get("grid_size", 6),
         "agents": _extract_agents_from_rounds(rounds),
-        "families": _extract_families_from_rounds(rounds),
+        "families": _extract_families(config, rounds),
         "total_rounds": len(rounds),
         "result": result,
     })
@@ -308,6 +313,23 @@ def _extract_agents_from_rounds(rounds: list[dict]) -> dict:
     """Extract agent info from the first round's grid data or actions."""
     if not rounds:
         return {}
+    first_round_agents = rounds[0].get("grid", {}).get("agents", [])
+    if first_round_agents:
+        return {
+            agent["id"]: {
+                "id": agent["id"],
+                "name": agent.get("name", agent["id"]),
+                "family": agent.get("family", ""),
+                "provider": agent.get("provider", ""),
+                "model": agent.get("model", ""),
+                "tier": agent.get("tier", 1),
+                "temperature": agent.get("temperature", 0.7),
+                "position": agent.get("position", [0, 0]),
+                "alive": agent.get("alive", True),
+            }
+            for agent in first_round_agents
+        }
+
     # Try to reconstruct from events and actions
     agents: dict[str, dict] = {}
     for round_data in rounds:
@@ -317,7 +339,11 @@ def _extract_agents_from_rounds(rounds: list[dict]) -> dict:
                     "id": agent_id,
                     "name": agent_id.capitalize(),
                     "family": "",
+                    "provider": "",
+                    "model": "",
                     "tier": 1,
+                    "temperature": 0.7,
+                    "position": [0, 0],
                     "alive": True,
                 }
         for msg in round_data.get("messages", []):
@@ -327,7 +353,11 @@ def _extract_agents_from_rounds(rounds: list[dict]) -> dict:
                     "id": aid,
                     "name": msg.get("sender_name", aid),
                     "family": msg.get("family", ""),
+                    "provider": "",
+                    "model": "",
                     "tier": 1,
+                    "temperature": 0.7,
+                    "position": [0, 0],
                     "alive": True,
                 }
             if aid in agents and msg.get("sender_name"):
@@ -351,11 +381,28 @@ def _extract_families_from_rounds(rounds: list[dict]) -> list[dict]:
     return list(families.values())
 
 
+def _extract_families(config: dict, rounds: list[dict]) -> list[dict]:
+    """Extract families from config with replay fallback to message reconstruction."""
+    config_families = config.get("families", [])
+    if config_families:
+        return [
+            {
+                "name": family.get("name", ""),
+                "provider": family.get("provider", ""),
+                "color": family.get("color", "#888888"),
+                "agent_ids": [agent.get("name", "").lower() for agent in family.get("agents", [])],
+            }
+            for family in config_families
+        ]
+    return _extract_families_from_rounds(rounds)
+
+
 def _build_grid_from_round(round_data: dict, config: dict) -> dict:
     """Build grid state from round data."""
+    agents = round_data.get("grid", {}).get("agents", [])
     return {
         "size": config.get("grid_size", 6),
-        "agents": [],  # Will be populated by dashboard from init + events
+        "agents": agents,
     }
 
 

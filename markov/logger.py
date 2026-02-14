@@ -45,6 +45,7 @@ class GameLogger:
         events: list[Event] | None = None,
         analysis: dict[str, dict] | None = None,
         highlights: list[Highlight] | None = None,
+        grid_agents: list[dict] | None = None,
     ) -> None:
         """Log a single round's data."""
         entry: dict = {"round": round_num}
@@ -63,6 +64,8 @@ class GameLogger:
                  "agent_id": e.agent_id, "details": e.details}
                 for e in events
             ]
+        if grid_agents is not None:
+            entry["grid"] = {"agents": grid_agents}
 
         self.rounds.append(entry)
 

@@ -348,6 +348,7 @@ async def run_round_llm(
         events=events,
         analysis=round_analysis,
         highlights=round_highlights,
+        grid_agents=[_agent_snapshot(a) for a in state.agents.values()],
     )
 
     if verbose:
@@ -388,7 +389,7 @@ async def run_game_llm(
     state = GameState(config)
     comms = CommunicationManager()
     game_logger = GameLogger()
-    game_logger.set_config({"grid_size": config.grid_size, "max_rounds": config.max_rounds})
+    game_logger.set_config(config.model_dump())
     game_metrics = GameMetrics()
     highlight_detector = HighlightDetector(state.agents, state.families)
 
@@ -586,8 +587,8 @@ async def _get_agent_action(
     system_prompt: str,
     grid: Grid,
     agents: dict[str, Agent],
-) -> tuple[str, Action]:
-    """Get action from an agent. Returns (raw_response, parsed_action)."""
+) -> tuple[str, Action, dict]:
+    """Get action from an agent. Returns (raw_response, parsed_action, parse_info)."""
     prompt = build_action_prompt(agent, grid, agents)
     valid_targets = [a.name for a in agents.values() if a.alive and a.id != agent.id]
 
@@ -601,6 +602,23 @@ async def _get_agent_action(
 
     action, action_parse_info = parse_action(response.text, agent.id, valid_targets)
     return response.text, action, action_parse_info
+
+
+def _agent_snapshot(agent: Agent) -> dict:
+    """Serializable round snapshot for dashboard replay fidelity."""
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "family": agent.family,
+        "provider": agent.provider,
+        "model": agent.model,
+        "tier": agent.tier,
+        "temperature": agent.temperature,
+        "position": list(agent.position),
+        "alive": agent.alive,
+        "eliminated_by": agent.eliminated_by,
+        "eliminated_round": agent.eliminated_round,
+    }
 
 
 async def _get_final_reflection(
