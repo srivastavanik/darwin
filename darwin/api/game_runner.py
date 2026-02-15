@@ -134,7 +134,11 @@ class GameRunner:
         return sorted(jobs, key=lambda j: j.started_at, reverse=True)
 
     def _list_supabase_games(self) -> list[GameJob]:
-        """Fetch completed games from Supabase. Cached after first call."""
+        """Fetch completed games from Supabase. Cached after first call.
+
+        Sources from game_rounds (which has actual data) rather than the games
+        table (which may have empty shells from failed starts).
+        """
         if self._sb_cache is not None:
             return self._sb_cache
         try:
@@ -142,31 +146,51 @@ class GameRunner:
             if not sb:
                 self._sb_cache = []
                 return []
+
+            # Get distinct game_ids that have actual round data, with timestamps
             resp = (
-                sb.table("games")
-                .select("id, total_rounds, winner_name, created_at")
+                sb.table("game_rounds")
+                .select("game_id, created_at")
                 .order("created_at", desc=True)
-                .limit(50)
+                .limit(1000)
                 .execute()
             )
-            jobs = []
+            # Group by game_id: count rounds, grab earliest timestamp
+            game_info: dict[str, dict] = {}
             for row in resp.data or []:
-                created = row.get("created_at", "")
+                gid = row["game_id"]
+                if gid not in game_info:
+                    game_info[gid] = {"count": 0, "created_at": row.get("created_at", "")}
+                game_info[gid]["count"] += 1
+
+            # Also try to get winner info from games table
+            winners: dict[str, str | None] = {}
+            try:
+                games_resp = sb.table("games").select("id, winner_name").execute()
+                for g in games_resp.data or []:
+                    winners[g["id"]] = g.get("winner_name")
+            except Exception:
+                pass
+
+            jobs = []
+            for gid, info in game_info.items():
+                created = info["created_at"]
                 try:
                     started = datetime.fromisoformat(created.replace("Z", "+00:00"))
                 except Exception:
                     started = datetime.now(timezone.utc)
                 jobs.append(GameJob(
-                    game_id=row["id"],
+                    game_id=gid,
                     mode="full",
                     status="completed",
                     started_at=started,
                     ended_at=started,
-                    winner=row.get("winner_name"),
-                    total_rounds=row.get("total_rounds"),
+                    winner=winners.get(gid),
+                    total_rounds=info["count"],
                 ))
+
             self._sb_cache = jobs
-            logger.info("Loaded %d games from Supabase", len(jobs))
+            logger.info("Loaded %d games from Supabase (by round data)", len(jobs))
             return jobs
         except Exception as e:
             logger.warning("Failed to load games from Supabase: %s", e)
@@ -213,23 +237,17 @@ class GameRunner:
         return self._replay_from_supabase(game_id)
 
     def _replay_from_supabase(self, game_id: str) -> dict | None:
-        """Reconstruct a replay payload from Supabase tables."""
+        """Reconstruct a replay payload from Supabase tables.
+
+        Works even when the games table has no entry for this game_id --
+        reconstructs agents from round data if game_agents is empty.
+        """
         try:
             sb = _get_supabase()
             if not sb:
                 return None
 
-            # Game metadata
-            game_resp = sb.table("games").select("*").eq("id", game_id).limit(1).execute()
-            if not game_resp.data:
-                return None
-            game = game_resp.data[0]
-
-            # Agents
-            agents_resp = sb.table("game_agents").select("*").eq("game_id", game_id).execute()
-            agents_list = agents_resp.data or []
-
-            # Rounds (ordered)
+            # Rounds (ordered) -- this is the primary data source
             rounds_resp = (
                 sb.table("game_rounds")
                 .select("round_num, thoughts_json, messages_json, events_json, actions_json, reasoning_traces_json, family_discussions_json")
@@ -237,91 +255,135 @@ class GameRunner:
                 .order("round_num")
                 .execute()
             )
+            if not rounds_resp.data:
+                return None
+
+            # Game metadata (optional -- may not exist)
+            game: dict = {}
+            try:
+                game_resp = sb.table("games").select("*").eq("id", game_id).limit(1).execute()
+                if game_resp.data:
+                    game = game_resp.data[0]
+            except Exception:
+                pass
+
+            # Agents from game_agents table
+            agents_list = []
+            try:
+                agents_resp = sb.table("game_agents").select("*").eq("game_id", game_id).execute()
+                agents_list = agents_resp.data or []
+            except Exception:
+                pass
 
             # Analysis
-            analysis_resp = (
-                sb.table("game_analysis")
-                .select("round_num, analysis_json")
-                .eq("game_id", game_id)
-                .order("round_num")
-                .execute()
-            )
             analysis_by_round: dict[int, dict] = {}
-            for a in analysis_resp.data or []:
-                rn = a.get("round_num")
-                raw = a.get("analysis_json")
-                if rn is not None and raw:
-                    analysis_by_round[rn] = json.loads(raw) if isinstance(raw, str) else raw
+            try:
+                analysis_resp = (
+                    sb.table("game_analysis")
+                    .select("round_num, analysis_json")
+                    .eq("game_id", game_id)
+                    .order("round_num")
+                    .execute()
+                )
+                for a in analysis_resp.data or []:
+                    rn = a.get("round_num")
+                    raw = a.get("analysis_json")
+                    if rn is not None and raw:
+                        analysis_by_round[rn] = json.loads(raw) if isinstance(raw, str) else raw
+            except Exception:
+                pass
 
             # Highlights
-            highlights_resp = (
-                sb.table("game_highlights")
-                .select("*")
-                .eq("game_id", game_id)
-                .order("round_num")
-                .execute()
-            )
             highlights_by_round: dict[int, list] = {}
-            for h in highlights_resp.data or []:
-                rn = h.get("round_num")
-                if rn is not None:
-                    highlights_by_round.setdefault(rn, []).append({
-                        "round": rn,
-                        "agent_id": h.get("agent_id"),
-                        "type": h.get("highlight_type"),
-                        "severity": h.get("severity"),
-                        "description": h.get("description"),
-                        "excerpt": h.get("excerpt"),
-                    })
+            try:
+                highlights_resp = (
+                    sb.table("game_highlights")
+                    .select("*")
+                    .eq("game_id", game_id)
+                    .order("round_num")
+                    .execute()
+                )
+                for h in highlights_resp.data or []:
+                    rn = h.get("round_num")
+                    if rn is not None:
+                        highlights_by_round.setdefault(rn, []).append({
+                            "round": rn,
+                            "agent_id": h.get("agent_id"),
+                            "type": h.get("highlight_type"),
+                            "severity": h.get("severity"),
+                            "description": h.get("description"),
+                            "excerpt": h.get("excerpt"),
+                        })
+            except Exception:
+                pass
+
+            # Helper to parse JSONB-or-string fields
+            def _parse(val: object) -> object:
+                if val is None:
+                    return None
+                return json.loads(val) if isinstance(val, str) else val
 
             # Build rounds
             rounds = []
             for r in rounds_resp.data or []:
                 rn = r["round_num"]
-                def _parse(field):
-                    v = r.get(field)
-                    if v is None:
-                        return None
-                    return json.loads(v) if isinstance(v, str) else v
-
                 round_entry = {
                     "round": rn,
-                    "thoughts": _parse("thoughts_json") or {},
-                    "messages": _parse("messages_json") or [],
-                    "events": _parse("events_json") or [],
-                    "actions": _parse("actions_json") or {},
-                    "reasoning_traces": _parse("reasoning_traces_json") or {},
-                    "family_discussions": _parse("family_discussions_json") or [],
+                    "thoughts": _parse(r.get("thoughts_json")) or {},
+                    "messages": _parse(r.get("messages_json")) or [],
+                    "events": _parse(r.get("events_json")) or [],
+                    "actions": _parse(r.get("actions_json")) or {},
+                    "reasoning_traces": _parse(r.get("reasoning_traces_json")) or {},
+                    "family_discussions": _parse(r.get("family_discussions_json")) or [],
                     "analysis": analysis_by_round.get(rn, {}),
                     "highlights": highlights_by_round.get(rn, []),
                 }
                 rounds.append(round_entry)
 
-            # Build agents dict
-            agents = {}
-            for a in agents_list:
-                agents[a["agent_id"]] = {
-                    "id": a["agent_id"],
-                    "name": a["agent_name"],
-                    "family": a["family"],
-                    "provider": a["provider"],
-                    "model": a.get("model", ""),
-                    "tier": a.get("tier", 1),
-                    "alive": a.get("alive", False),
-                    "eliminated_round": a.get("eliminated_round"),
-                    "eliminated_by": a.get("eliminated_by"),
-                    "rounds_survived": a.get("rounds_survived", 0),
-                }
+            # Build agents dict from game_agents if available
+            agents: dict = {}
+            if agents_list:
+                for a in agents_list:
+                    agents[a["agent_id"]] = {
+                        "id": a["agent_id"],
+                        "name": a["agent_name"],
+                        "family": a["family"],
+                        "provider": a["provider"],
+                        "model": a.get("model", ""),
+                        "tier": a.get("tier", 1),
+                        "alive": a.get("alive", False),
+                        "eliminated_round": a.get("eliminated_round"),
+                        "eliminated_by": a.get("eliminated_by"),
+                        "rounds_survived": a.get("rounds_survived", 0),
+                    }
+            else:
+                # Reconstruct agents from reasoning_traces in round data
+                # (reasoning_traces_json keys are agent_ids)
+                for r in rounds:
+                    for agent_id in r.get("reasoning_traces", {}):
+                        if agent_id not in agents:
+                            agents[agent_id] = {
+                                "id": agent_id,
+                                "name": agent_id,
+                                "family": "Unknown",
+                                "provider": "unknown",
+                                "model": "",
+                                "tier": 1,
+                                "alive": True,
+                                "eliminated_round": None,
+                                "eliminated_by": None,
+                                "rounds_survived": 0,
+                            }
 
-            config = json.loads(game["config_json"]) if isinstance(game.get("config_json"), str) else (game.get("config_json") or {})
+            config = _parse(game.get("config_json")) or {} if game else {}
 
             return {
                 "game_id": game_id,
                 "config": config,
                 "agents": agents,
                 "rounds": rounds,
-                "winner": game.get("winner_name"),
-                "total_rounds": game.get("total_rounds"),
+                "winner": game.get("winner_name") if game else None,
+                "total_rounds": len(rounds),
             }
 
         except Exception as e:
