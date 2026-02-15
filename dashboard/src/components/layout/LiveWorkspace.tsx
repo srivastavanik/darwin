@@ -16,7 +16,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
 
 const TIER_LABELS: Record<number, string> = { 1: "Boss", 2: "Lt", 3: "Soldier" };
 
-type MsgTab = "thoughts" | "family" | "dms" | "broadcasts" | "all";
+type MsgTab = "reasoning" | "thoughts" | "family" | "dms" | "broadcasts" | "all";
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -134,7 +134,34 @@ export function LiveWorkspace() {
     for (const round of rounds) {
       const rn = round.round;
 
-      if (round.thoughts) {
+      // Reasoning traces (extended thinking)
+      if (round.reasoning_traces) {
+        for (const [agentId, trace] of Object.entries(round.reasoning_traces)) {
+          const agent = agents[agentId];
+          if (!agent) continue;
+          if (activeAgent && agent.id !== activeAgent.id) continue;
+          if (!activeAgent && !familyAgentIds.has(agent.id)) continue;
+          const text = trace.thinking_trace || trace.reasoning_summary || "";
+          if (!text) continue;
+          const cls = trace.classification;
+          entries.push({
+            round: rn, type: "reasoning", agentId, agentName: agent.name,
+            agentProvider: agent.provider, content: text,
+            classification: cls ? {
+              intent_tags: cls.intent_tags,
+              moral_friction: cls.moral_friction,
+              deception_sophistication: cls.deception_sophistication,
+              strategic_depth: cls.strategic_depth,
+              theory_of_mind: cls.theory_of_mind,
+              meta_awareness: cls.meta_awareness,
+            } : undefined,
+            thinkingTokens: trace.tokens_thinking,
+          });
+        }
+      }
+
+      // Legacy thoughts (fallback if no reasoning traces)
+      if (round.thoughts && !round.reasoning_traces) {
         for (const [agentId, thought] of Object.entries(round.thoughts)) {
           const agent = agents[agentId];
           if (!agent) continue;
@@ -241,7 +268,7 @@ export function LiveWorkspace() {
 
         {/* Message type tabs */}
         <div className="flex shrink-0 border-b border-black/10">
-          {(["all", "thoughts", "family", "dms", "broadcasts"] as MsgTab[]).map((tab) => (
+          {(["all", "reasoning", "thoughts", "family", "dms", "broadcasts"] as MsgTab[]).map((tab) => (
             <button key={tab} onClick={() => setMsgTab(tab)}
               className={`flex-1 px-1 py-1.5 text-[10px] capitalize border-b-2 transition-colors ${msgTab === tab ? "border-black text-black font-medium" : "border-transparent text-black/35"}`}>
               {tab === "dms" ? "DMs" : tab === "all" ? "All" : tab}
@@ -275,7 +302,7 @@ export function LiveWorkspace() {
             <div>
               <div className="sticky top-0 z-10 bg-violet-100/50 px-4 py-1.5 text-[10px] font-medium text-violet-600 border-b border-violet-200/30 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-violet-500 animate-pulse" />
-                {streamingPhase === "thinking" ? "Thinking..." : streamingPhase === "family_discussion" ? "Family Discussion..." : "Communicating..."}
+                {streamingPhase === "deciding" ? "Reasoning..." : streamingPhase === "thinking" ? "Thinking..." : streamingPhase === "family_discussion" ? "Family Discussion..." : "Communicating..."}
               </div>
               <div className="divide-y divide-black/[0.04]">
                 {streamingEntries.map((se) => (
@@ -284,7 +311,7 @@ export function LiveWorkspace() {
                       {PROVIDER_LOGOS[se.agentProvider] && <Image src={PROVIDER_LOGOS[se.agentProvider]} alt="" width={13} height={13} className="object-contain" />}
                       <span className="text-xs font-medium text-black/80">{se.agentName}</span>
                       <span className="text-[9px] px-1.5 py-0.5 border border-violet-200 text-violet-500">
-                        {se.phase === "thinking" ? "thinking" : se.phase === "family_discussion" ? "family" : "comm"}
+                        {se.phase === "deciding" ? "reasoning" : se.phase === "thinking" ? "thinking" : se.phase === "family_discussion" ? "family" : "comm"}
                       </span>
                     </div>
                     <div className="text-xs text-black/70 whitespace-pre-wrap leading-[1.65] pl-[18px]">
@@ -313,13 +340,22 @@ export function LiveWorkspace() {
 
 interface StreamEntry {
   round: number;
-  type: "thought" | "family" | "dm" | "broadcast";
+  type: "reasoning" | "thought" | "family" | "dm" | "broadcast";
   agentId: string;
   agentName: string;
   agentProvider: string;
   content: string;
   meta?: string;
   isSent?: boolean;
+  classification?: {
+    intent_tags: string[];
+    moral_friction: number;
+    deception_sophistication: number;
+    strategic_depth: number;
+    theory_of_mind: number;
+    meta_awareness: number;
+  };
+  thinkingTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -327,11 +363,65 @@ interface StreamEntry {
 // ---------------------------------------------------------------------------
 
 const TYPE_STYLE: Record<string, { label: string; border: string; bg: string }> = {
+  reasoning: { label: "reasoning", border: "border-purple-200", bg: "bg-purple-50/30" },
   thought: { label: "thinking", border: "border-violet-200", bg: "bg-violet-50/30" },
   family: { label: "family", border: "border-blue-200", bg: "bg-blue-50/20" },
   dm: { label: "DM", border: "border-amber-200", bg: "bg-amber-50/20" },
   broadcast: { label: "broadcast", border: "border-black/10", bg: "" },
 };
+
+function ClassificationBadges({ classification, thinkingTokens }: {
+  classification?: StreamEntry["classification"];
+  thinkingTokens?: number;
+}) {
+  if (!classification && !thinkingTokens) return null;
+  const badges: { label: string; color: string }[] = [];
+
+  if (thinkingTokens) {
+    badges.push({ label: `${thinkingTokens} tok`, color: "bg-purple-100 text-purple-600" });
+  }
+
+  if (classification) {
+    for (const tag of classification.intent_tags.slice(0, 3)) {
+      const tagColors: Record<string, string> = {
+        TARGETING: "bg-red-100 text-red-600",
+        DECEPTION_PLANNING: "bg-orange-100 text-orange-600",
+        BETRAYAL_PLANNING: "bg-red-100 text-red-600",
+        ALLIANCE_SINCERE: "bg-green-100 text-green-600",
+        ALLIANCE_INSTRUMENTAL: "bg-yellow-100 text-yellow-700",
+        SELF_PRESERVATION: "bg-blue-100 text-blue-600",
+        THREAT_ASSESSMENT: "bg-amber-100 text-amber-600",
+      };
+      badges.push({ label: tag.toLowerCase().replace("_", " "), color: tagColors[tag] ?? "bg-gray-100 text-gray-500" });
+    }
+
+    if (classification.moral_friction >= 3) {
+      badges.push({ label: `friction:${classification.moral_friction}`, color: "bg-emerald-100 text-emerald-600" });
+    } else if (classification.moral_friction === 0 && classification.intent_tags.includes("TARGETING")) {
+      badges.push({ label: "frictionless", color: "bg-red-100 text-red-600" });
+    }
+
+    if (classification.theory_of_mind >= 3) {
+      badges.push({ label: `ToM:${classification.theory_of_mind}`, color: "bg-indigo-100 text-indigo-600" });
+    }
+
+    if (classification.meta_awareness >= 2) {
+      badges.push({ label: `meta:${classification.meta_awareness}`, color: "bg-pink-100 text-pink-600" });
+    }
+  }
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5 pl-[18px]">
+      {badges.map((b, i) => (
+        <span key={i} className={`text-[8px] px-1.5 py-0.5 font-medium ${b.color}`}>
+          {b.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function EntryCard({ entry, agents, isNew }: { entry: StreamEntry; agents: Record<string, AgentState>; isNew: boolean }) {
   const style = TYPE_STYLE[entry.type] ?? TYPE_STYLE.broadcast;
@@ -346,6 +436,9 @@ function EntryCard({ entry, agents, isNew }: { entry: StreamEntry; agents: Recor
       <div className="text-xs text-black/70 whitespace-pre-wrap leading-[1.65] pl-[18px]">
         <FadeInText text={entry.content} isNew={isNew} agents={agents} />
       </div>
+      {entry.type === "reasoning" && (
+        <ClassificationBadges classification={entry.classification} thinkingTokens={entry.thinkingTokens} />
+      )}
     </div>
   );
 }

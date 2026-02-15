@@ -81,12 +81,30 @@ export interface SafetyArtifacts {
   rationalization_type: string | null;
 }
 
+export interface ReasoningClassification {
+  intent_tags: string[];
+  moral_friction: number;
+  deception_sophistication: number;
+  strategic_depth: number;
+  theory_of_mind: number;
+  meta_awareness: number;
+  key_excerpts: string[];
+}
+
+export interface ReasoningTrace {
+  thinking_trace: string | null;
+  reasoning_summary: string | null;
+  tokens_thinking: number;
+  classification?: ReasoningClassification;
+}
+
 export interface AgentAnalysis {
   deception_delta: number;
   malice: MaliceIndicators;
   family_sentiment: Record<string, number>;
   betrayal: BetrayalData;
   safety_artifacts: SafetyArtifacts;
+  classification?: ReasoningClassification;
 }
 
 export interface RoundMessages {
@@ -120,6 +138,7 @@ export interface RoundData {
   alive_count: number;
   game_over: boolean;
   winner: string | null;
+  reasoning_traces?: Record<string, ReasoningTrace>;
 }
 
 export interface GameInitData {
