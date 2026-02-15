@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, type ReactNode } from "react";
 import Image from "next/image";
 import { GameGrid } from "@/components/GameGrid";
 import { KillTimeline } from "@/components/KillTimeline";
@@ -29,6 +29,10 @@ const TAB_TO_TYPE: Record<MsgTab, string | null> = {
 
 function cleanText(raw: string): string {
   let s = raw;
+  // Strip ```json...``` code blocks (Gemini sometimes embeds full JSON responses)
+  s = s.replace(/```json\s*[\s\S]*?```/g, "");
+  // Strip bare JSON objects at the end of text
+  s = s.replace(/\n\s*\{[\s\S]*\}\s*$/, "");
   s = s.replace(/^#{1,6}\s+/gm, "");
   s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
   s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1");
@@ -48,7 +52,7 @@ function renderMentions(text: string, agents: Record<string, AgentState>): React
       );
       if (agent) {
         return (
-          <span key={i} className="bg-blue-100 text-blue-700 px-1 py-px text-[10px] font-medium">
+          <span key={i} className="inline-flex items-center bg-blue-500/15 text-blue-600 px-1.5 py-0.5 text-[10px] font-semibold cursor-default hover:bg-blue-500/25 transition-colors" style={{ borderRadius: "9999px" }}>
             @{agent.name}
           </span>
         );
@@ -105,14 +109,29 @@ export function LiveWorkspace() {
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [msgTab, setMsgTab] = useState<MsgTab>("all");
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastRoundCount = useRef(0);
 
-  // Auto-scroll on new rounds or streaming tokens
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    setIsNearBottom(nearBottom);
+    if (nearBottom) setUnreadCount(0);
+  }, []);
+
+  // Auto-scroll only when user is near bottom
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [rounds.length, streamingTokens]);
+    if (!el) return;
+    if (isNearBottom) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      setUnreadCount((prev) => prev + 1);
+    }
+  }, [rounds.length, streamingTokens, isNearBottom]);
 
   // Track which round is "new" for fade animation
   const newRoundNum = rounds.length > lastRoundCount.current ? rounds[rounds.length - 1]?.round : -1;
@@ -282,14 +301,14 @@ export function LiveWorkspace() {
         </div>
 
         {/* Scrollable stream */}
-        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto relative">
           {rounds.length === 0 && streamingEntries.length === 0 && (
             <div className="text-xs text-black/30 text-center py-12">Waiting for game data...</div>
           )}
 
           {byRound.map(([roundNum, entries]) => (
             <div key={roundNum}>
-              <div className="sticky top-0 z-10 bg-black/[0.03] px-4 py-1.5 text-[10px] font-medium text-black/50 border-b border-black/5">
+              <div className="sticky top-0 z-10 bg-[#f7f7f7] px-4 py-1.5 text-[10px] font-medium text-black/50 border-b border-black/5">
                 Round {roundNum}
               </div>
               <div className="divide-y divide-black/[0.04]">
@@ -305,17 +324,17 @@ export function LiveWorkspace() {
           {/* Live streaming section */}
           {streamingEntries.length > 0 && (
             <div>
-              <div className="sticky top-0 z-10 bg-violet-100/50 px-4 py-1.5 text-[10px] font-medium text-violet-600 border-b border-violet-200/30 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-violet-500 animate-pulse" />
+              <div className="sticky top-0 z-10 bg-[#f7f7f7] px-4 py-1.5 text-[10px] font-medium text-black/50 border-b border-black/5 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-black/40 animate-pulse" />
                 {streamingPhase === "deciding" ? "Reasoning..." : streamingPhase === "thinking" ? "Thinking..." : streamingPhase === "family_discussion" ? "Family Discussion..." : "Communicating..."}
               </div>
               <div className="divide-y divide-black/[0.04]">
                 {streamingEntries.map((se) => (
-                  <div key={se.agentId} className="px-4 py-3 bg-violet-50/20">
+                  <div key={se.agentId} className="px-4 py-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       {PROVIDER_LOGOS[se.agentProvider] && <Image src={PROVIDER_LOGOS[se.agentProvider]} alt="" width={13} height={13} className="object-contain" />}
                       <span className="text-xs font-medium text-black/80">{se.agentName}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 border border-violet-200 text-violet-500">
+                      <span className="text-[9px] px-1.5 py-0.5 border border-black/10 text-black/40">
                         {se.phase === "deciding" ? "reasoning" : se.phase === "thinking" ? "thinking" : se.phase === "family_discussion" ? "family" : "comm"}
                       </span>
                     </div>
@@ -326,6 +345,16 @@ export function LiveWorkspace() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Unread messages pill */}
+          {!isNearBottom && unreadCount > 0 && (
+            <button
+              onClick={() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; setUnreadCount(0); }}
+              className="sticky bottom-2 left-1/2 -translate-x-1/2 z-20 bg-black text-white text-[10px] px-3 py-1.5 shadow-lg hover:bg-black/80 transition-colors"
+            >
+              {unreadCount} new {unreadCount === 1 ? "message" : "messages"} below
+            </button>
           )}
         </div>
 
@@ -368,8 +397,8 @@ interface StreamEntry {
 // ---------------------------------------------------------------------------
 
 const TYPE_STYLE: Record<string, { label: string; border: string; bg: string }> = {
-  reasoning: { label: "reasoning", border: "border-purple-200", bg: "bg-purple-50/30" },
-  thought: { label: "thinking", border: "border-violet-200", bg: "bg-violet-50/30" },
+  reasoning: { label: "reasoning", border: "border-black/15", bg: "bg-black/[0.02]" },
+  thought: { label: "thinking", border: "border-black/10", bg: "bg-black/[0.02]" },
   family: { label: "family", border: "border-blue-200", bg: "bg-blue-50/20" },
   dm: { label: "DM", border: "border-amber-200", bg: "bg-amber-50/20" },
   broadcast: { label: "broadcast", border: "border-black/10", bg: "" },
@@ -383,7 +412,7 @@ function ClassificationBadges({ classification, thinkingTokens }: {
   const badges: { label: string; color: string }[] = [];
 
   if (thinkingTokens) {
-    badges.push({ label: `${thinkingTokens} tok`, color: "bg-purple-100 text-purple-600" });
+    badges.push({ label: `${thinkingTokens} tok`, color: "bg-black/[0.06] text-black/50" });
   }
 
   if (classification) {
