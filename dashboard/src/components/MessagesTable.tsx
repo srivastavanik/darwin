@@ -63,6 +63,7 @@ export function MessagesTable() {
             <thead className="sticky top-0 bg-zinc-50 border-b border-black/10">
               <tr>
                 <th className="text-left px-2 py-1">Round</th>
+                <th className="text-left px-2 py-1">Time</th>
                 <th className="text-left px-2 py-1">Sender</th>
                 <th className="text-left px-2 py-1">Channel</th>
                 <th className="text-left px-2 py-1">Recipient</th>
@@ -73,6 +74,7 @@ export function MessagesTable() {
               {rows.map((m, idx) => (
                 <tr key={`${idx}-${m.round}-${m.sender}`} className="border-b border-black/5 align-top">
                   <td className="px-2 py-1">R{m.round}</td>
+                  <td className="px-2 py-1">{formatTimestamp(m.sent_at)}</td>
                   <td className="px-2 py-1">{m.sender_name}</td>
                   <td className="px-2 py-1">{m.channel}</td>
                   <td className="px-2 py-1">{m.recipient || "-"}</td>
@@ -86,7 +88,7 @@ export function MessagesTable() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-2 py-4 text-center text-muted-foreground">
                     No messages match current filters.
                   </td>
                 </tr>
@@ -99,3 +101,9 @@ export function MessagesTable() {
   );
 }
 
+function formatTimestamp(sentAt?: string | null) {
+  if (!sentAt) return "-";
+  const parsed = new Date(sentAt);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}

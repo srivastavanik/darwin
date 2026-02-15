@@ -1,6 +1,7 @@
 """
-WebSocket server. Pushes game state to the dashboard after every round.
-Also supports replay mode for reviewing past games.
+WebSocket server. Pushes game state to the dashboard after every round,
+plus realtime events during rounds. Also supports replay mode for reviewing
+past games.
 """
 from __future__ import annotations
 
@@ -239,6 +240,7 @@ class GameBroadcaster:
         winner: Agent | None,
         game_id: str | None = None,
         reasoning_traces: dict[str, dict] | None = None,
+        round_elapsed_ms: int | None = None,
     ) -> None:
         # Categorize messages
         broadcasts = [m.to_dict() for m in messages if m.channel == "broadcast"]
@@ -296,6 +298,19 @@ class GameBroadcaster:
             "game_over": game_over,
             "winner": winner.name if winner else None,
             "reasoning_traces": reasoning_traces or {},
+            "round_elapsed_ms": round_elapsed_ms,
+        }, game_id=game_id)
+
+    async def broadcast_message(
+        self,
+        message: Message,
+        game_id: str | None = None,
+    ) -> None:
+        await self.broadcast({
+            "type": "message",
+            "game_id": game_id,
+            "round": message.round,
+            "message": message.to_dict(),
         }, game_id=game_id)
 
     async def broadcast_game_over(

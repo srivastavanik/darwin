@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import random
+import time
 from typing import Callable, Protocol
 
 from markov.agent import Agent
@@ -16,6 +17,7 @@ from markov.communication import (
     DECISION_JSON_SCHEMA,
     CommunicationManager,
     Message,
+    _extract_json_object,
     parse_decision_response,
 )
 from markov.config import GameConfig, load_game_config
@@ -33,6 +35,7 @@ from markov.logger import GameLogger
 from markov.prompts import (
     build_decision_prompt,
     build_discussion_prompt,
+    build_dm_reply_prompt,
     build_final_reflection_prompt,
     build_perception,
     build_system_prompt,
@@ -195,12 +198,14 @@ async def run_round_llm(
     broadcaster: GameBroadcaster | None = None,
     game_id: str | None = None,
     verbose: bool = False,
+    conversation_histories: dict[str, list[dict]] | None = None,
 ) -> list[Event]:
     """
     Execute one round with LLM calls.
     4 phases: observe -> communicate -> think -> act -> resolve
     """
     state.round_num += 1
+    round_start = time.monotonic()
 
     for agent in state.living_agents:
         agent.rounds_survived += 1
@@ -259,6 +264,7 @@ async def run_round_llm(
         family_results = await asyncio.gather(*[
             _run_family_discussion(
                 family, state, perceptions, system_prompts, comms,
+                discussion_timeout_s=state.config.discussion_timeout_s,
                 broadcaster=broadcaster, game_id=game_id,
             )
             for family in living_families
@@ -286,7 +292,9 @@ async def run_round_llm(
         _get_agent_decision(
             agent, perceptions[agent.id], system_prompts[agent.id],
             state.grid, state.agents, valid_agent_names, valid_targets,
+            decision_timeout_s=state.config.decision_timeout_s,
             broadcaster=broadcaster, game_id=game_id, round_num=state.round_num,
+            conversation_history=conversation_histories.get(agent.id) if conversation_histories is not None else None,
         )
         for agent in living
     ]
@@ -321,6 +329,7 @@ async def run_round_llm(
         # Broadcast per-agent communication completion
         if broadcaster and messages:
             for msg in messages:
+                await broadcaster.broadcast_message(msg, game_id=game_id)
                 await broadcaster.broadcast_token_delta(
                     game_id, state.round_num, "deciding",
                     agent.id, agent.name, msg.content,
@@ -363,10 +372,31 @@ async def run_round_llm(
             **trace_entry,
         })
 
+        # Update multi-turn conversation history
+        if conversation_histories is not None:
+            history = conversation_histories.setdefault(agent.id, [])
+            history.append({"role": "user", "content": build_decision_prompt(agent, perceptions[agent.id], state.grid, state.agents)})
+            history.append({"role": "assistant", "content": response.text})
+            # Trim to last 8 rounds (16 messages)
+            if len(history) > 16:
+                conversation_histories[agent.id] = history[-16:]
+
     comms.add_messages(round_messages)
 
     if broadcaster:
         await broadcaster.broadcast_phase_complete(game_id, state.round_num, "deciding")
+
+    # ---------------------------------------------------------------
+    # Phase 3b: DM REPLIES — recipients can reply within the round
+    # ---------------------------------------------------------------
+    dm_replies = await _run_dm_reply_phase(
+        state, round_messages, system_prompts,
+        dm_reply_timeout_s=state.config.dm_reply_timeout_s,
+        broadcaster=broadcaster, game_id=game_id,
+    )
+    if dm_replies:
+        round_messages.extend(dm_replies)
+        comms.add_messages(dm_replies)
 
     if verbose:
         _print_communications(state, round_messages)
@@ -415,6 +445,9 @@ async def run_round_llm(
         if round_highlights:
             _print_highlights(round_highlights)
 
+    round_elapsed = time.monotonic() - round_start
+    logger.info("Round %d completed in %.1fs", state.round_num, round_elapsed)
+
     # Broadcast to dashboard
     if broadcaster:
         await broadcaster.broadcast_round(
@@ -432,6 +465,7 @@ async def run_round_llm(
             winner=state.winner,
             game_id=game_id,
             reasoning_traces=reasoning_traces,
+            round_elapsed_ms=round(round_elapsed * 1000),
         )
 
     return events
@@ -462,6 +496,9 @@ async def run_game_llm(
     for agent in state.agents.values():
         system_prompts[agent.id] = build_system_prompt(agent, state.families, state.agents, grid_size=config.grid_size)
 
+    # Multi-turn conversation history per agent (last 8 rounds)
+    conversation_histories: dict[str, list[dict]] = {}
+
     if verbose:
         print(f"=== MARKOV LLM: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
         print(state.grid.render_ascii(state.agents))
@@ -487,6 +524,7 @@ async def run_game_llm(
             game_metrics, highlight_detector, broadcaster=broadcaster,
             game_id=game_id,
             verbose=verbose,
+            conversation_histories=conversation_histories,
         )
 
         # Incremental persistence callback
@@ -593,6 +631,7 @@ async def _run_family_discussion(
     perceptions: dict[str, str],
     system_prompts: dict[str, str],
     comms: CommunicationManager,
+    discussion_timeout_s: float,
     broadcaster: GameBroadcaster | None = None,
     game_id: str | None = None,
 ) -> dict | None:
@@ -609,41 +648,51 @@ async def _run_family_discussion(
             prompt = build_discussion_prompt(agent, perception, transcript, disc_round)
 
             try:
-                content = await call_llm_stream(
-                    model=agent.model,
-                    system_prompt=system_prompts[agent.id],
-                    user_prompt=prompt,
-                    temperature=agent.temperature,
-                    max_tokens=512,
-                    timeout=20,
-                    provider=agent.provider,
-                    on_token=lambda delta, _aid=agent.id, _aname=agent.name: asyncio.get_event_loop().create_task(
-                        broadcaster.broadcast_token_delta(game_id, state.round_num, "family_discussion", _aid, _aname, delta)
-                    ) if broadcaster else None,
+                content = await asyncio.wait_for(
+                    call_llm_stream(
+                        model=agent.model,
+                        system_prompt=system_prompts[agent.id],
+                        user_prompt=prompt,
+                        temperature=agent.temperature,
+                        max_tokens=512,
+                        timeout=20,
+                        provider=agent.provider,
+                        on_token=lambda delta, _aid=agent.id, _aname=agent.name: asyncio.get_event_loop().create_task(
+                            broadcaster.broadcast_token_delta(game_id, state.round_num, "family_discussion", _aid, _aname, delta)
+                        ) if broadcaster else None,
+                    ),
+                    timeout=discussion_timeout_s,
                 )
+            except asyncio.TimeoutError:
+                logger.warning("Family discussion timed out for %s after %.1fs", agent.name, discussion_timeout_s)
+                content = "[Discussion contribution timed out]"
             except Exception as e:
                 logger.error("Family discussion LLM call failed for %s (model=%s provider=%s): %s",
                              agent.name, agent.model, agent.provider, e, exc_info=True)
                 content = "[Discussion contribution failed]"
 
-            entry = {
-                "agent": agent.name,
-                "agent_id": agent.id,
-                "tier": agent.tier,
-                "discussion_round": disc_round,
-                "content": content,
-            }
-            transcript.append(entry)
-
-            # Store as family channel message
-            comms.add_messages([Message(
+            message = Message(
                 round=state.round_num,
                 sender=agent.id,
                 sender_name=agent.name,
                 channel="family",
                 content=content,
                 family=family.name,
-            )])
+            )
+            entry = {
+                "agent": agent.name,
+                "agent_id": agent.id,
+                "tier": agent.tier,
+                "discussion_round": disc_round,
+                "content": content,
+                "sent_at": message.sent_at,
+            }
+            transcript.append(entry)
+
+            # Store as family channel message
+            comms.add_messages([message])
+            if broadcaster:
+                await broadcaster.broadcast_message(message, game_id=game_id)
 
     return {"family": family.name, "transcript": transcript}
 
@@ -656,9 +705,11 @@ async def _get_agent_decision(
     agents: dict[str, Agent],
     valid_agent_names: list[str],
     valid_target_names: list[str],
+    decision_timeout_s: float,
     broadcaster: GameBroadcaster | None = None,
     game_id: str | None = None,
     round_num: int = 0,
+    conversation_history: list[dict] | None = None,
 ) -> tuple[ThinkingResponse, list[Message], Action, dict]:
     """
     Single merged decision call with extended thinking.
@@ -666,6 +717,12 @@ async def _get_agent_decision(
     Thinking trace = the core dataset (reasoning traces).
     """
     prompt = build_decision_prompt(agent, perception, grid, agents)
+
+    # Build multi-turn messages from conversation history
+    llm_messages: list[dict] | None = None
+    if conversation_history:
+        llm_messages = list(conversation_history)
+        llm_messages.append({"role": "user", "content": prompt})
 
     # Build streaming callback for thinking tokens
     on_thinking: Callable[[str], None] | None = None
@@ -676,19 +733,32 @@ async def _get_agent_decision(
             )
 
     try:
-        response = await call_llm_with_thinking(
-            model=agent.model,
-            system_prompt=system_prompt,
-            user_prompt=prompt,
-            temperature=agent.temperature,
-            max_tokens=1024,
-            thinking_budget=4096,
-            timeout=30,
-            provider=agent.provider,
-            enforce_json=True,
-            json_schema=DECISION_JSON_SCHEMA,
-            on_thinking_token=on_thinking,
+        response = await asyncio.wait_for(
+            call_llm_with_thinking(
+                model=agent.model,
+                system_prompt=system_prompt,
+                user_prompt=prompt,
+                temperature=agent.temperature,
+                max_tokens=1024,
+                thinking_budget=4096,
+                timeout=30,
+                provider=agent.provider,
+                enforce_json=True,
+                json_schema=DECISION_JSON_SCHEMA,
+                on_thinking_token=on_thinking,
+                messages=llm_messages,
+            ),
+            timeout=decision_timeout_s,
         )
+    except asyncio.TimeoutError:
+        logger.warning("Decision timed out for %s after %.1fs", agent.name, decision_timeout_s)
+        fallback_response = ThinkingResponse(
+            text='{"communicate":{"house":null,"direct_messages":[],"broadcast":null},"action":{"action":"stay","direction":null,"target":null}}',
+            thinking_trace=None,
+            reasoning_summary=None,
+            model=agent.model,
+        )
+        return fallback_response, [], Action(agent_id=agent.id, type=ActionType.STAY), {"method": "timeout_fallback"}
     except Exception as e:
         logger.error("Decision LLM call failed for %s (model=%s provider=%s): %s",
                      agent.name, agent.model, agent.provider, e, exc_info=True)
@@ -714,6 +784,114 @@ async def _get_agent_decision(
         parse_info = {"method": "parse_error_default_stay", "raw_truncated": response.text[:300]}
 
     return response, messages, action, parse_info
+
+
+async def _run_dm_reply_phase(
+    state: GameState,
+    round_messages: list[Message],
+    system_prompts: dict[str, str],
+    dm_reply_timeout_s: float,
+    broadcaster: GameBroadcaster | None = None,
+    game_id: str | None = None,
+) -> list[Message]:
+    """Let DM recipients reply within the same round. Single exchange."""
+    dms = [m for m in round_messages if m.channel == "dm"]
+    if not dms:
+        return []
+
+    # Group DMs by recipient
+    by_recipient: dict[str, list[Message]] = {}
+    for dm in dms:
+        if not dm.recipient:
+            continue
+        for agent in state.living_agents:
+            if agent.name.lower() == dm.recipient.lower():
+                by_recipient.setdefault(agent.id, []).append(dm)
+                break
+
+    if not by_recipient:
+        return []
+
+    if broadcaster:
+        await broadcaster.broadcast_phase_start(
+            game_id, state.round_num, "dm_replies",
+            list(by_recipient.keys()),
+        )
+
+    # Parallel reply calls
+    tasks = []
+    agent_ids = []
+    for agent_id, received in by_recipient.items():
+        agent = state.agents[agent_id]
+        dm_list = [{"sender_name": m.sender_name, "content": m.content} for m in received]
+        prompt = build_dm_reply_prompt(dm_list, state.round_num)
+        tasks.append(asyncio.wait_for(
+            call_llm(
+                model=agent.model,
+                system_prompt=system_prompts[agent_id],
+                user_prompt=prompt,
+                temperature=agent.temperature,
+                max_tokens=256,
+                provider=agent.provider,
+            ),
+            timeout=dm_reply_timeout_s,
+        ))
+        agent_ids.append(agent_id)
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    reply_messages: list[Message] = []
+    valid_names_lower = {a.name.lower(): a.name for a in state.living_agents}
+
+    for agent_id, result in zip(agent_ids, results):
+        if isinstance(result, asyncio.TimeoutError):
+            logger.warning("DM reply timed out for %s after %.1fs", agent_id, dm_reply_timeout_s)
+            continue
+        if isinstance(result, BaseException):
+            logger.error("DM reply failed for %s: %s", agent_id, result)
+            continue
+
+        agent = state.agents[agent_id]
+        data = _extract_json_object(result.text)
+        if data is None:
+            logger.debug("DM reply parse failed for %s", agent_id)
+            continue
+
+        for reply in data.get("replies", []):
+            if not isinstance(reply, dict):
+                continue
+            to_name = str(reply.get("to", ""))
+            msg_text = str(reply.get("message", ""))
+            if not to_name or not msg_text:
+                continue
+            resolved = valid_names_lower.get(to_name.lower())
+            if not resolved:
+                for vlow, vname in valid_names_lower.items():
+                    if vlow.startswith(to_name.lower()) or to_name.lower().startswith(vlow):
+                        resolved = vname
+                        break
+            if resolved:
+                reply_messages.append(Message(
+                    round=state.round_num,
+                    sender=agent_id,
+                    sender_name=agent.name,
+                    channel="dm",
+                    recipient=resolved,
+                    content=msg_text.strip(),
+                    family=agent.family,
+                ))
+
+    if broadcaster:
+        for msg in reply_messages:
+            agent = state.agents[msg.sender]
+            await broadcaster.broadcast_message(msg, game_id=game_id)
+            await broadcaster.broadcast_token_delta(
+                game_id, state.round_num, "dm_replies",
+                agent.id, agent.name, msg.content,
+            )
+        await broadcaster.broadcast_phase_complete(game_id, state.round_num, "dm_replies")
+
+    return reply_messages
 
 
 def _agent_snapshot(agent: Agent) -> dict:

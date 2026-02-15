@@ -8,6 +8,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from markov.agent import Agent
 from markov.grid import DIRECTION_DELTAS
@@ -37,6 +38,7 @@ class Message:
     recipient: str | None = None   # agent name for DM, None for family/broadcast
     content: str = ""
     family: str = ""     # sender's family
+    sent_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> dict:
         return {
@@ -47,6 +49,7 @@ class Message:
             "recipient": self.recipient,
             "content": self.content,
             "family": self.family,
+            "sent_at": self.sent_at,
         }
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,32 @@ const STATUS_CLASS: Record<WebSocketStatus | "replay" | "idle", string> = {
   replay: "bg-blue-100 text-blue-800 border-blue-200",
 };
 
+function GameElapsedTimer({ running }: { running: boolean }) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!running) {
+      startRef.current = null;
+      setElapsed(0);
+      return;
+    }
+    if (startRef.current === null) {
+      startRef.current = Date.now();
+    }
+    const tick = setInterval(() => {
+      if (startRef.current) setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [running]);
+
+  if (!running || elapsed === 0) return null;
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  return <span className="tabular-nums font-mono">{mins}:{secs.toString().padStart(2, "0")}</span>;
+}
+
 interface AppTopBarProps {
   status?: WebSocketStatus | "replay" | "idle";
   games?: ApiGameSummary[];
@@ -43,6 +69,7 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
     playing,
     playbackSpeed,
     activeGameId,
+    streamingPhase,
     showAdjacencyLines,
     showGhostOutlines,
     setShowAdjacencyLines,
@@ -55,13 +82,13 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
   } = useGameState();
 
   const eliminationRounds = useMemo(() => {
-    return rounds
-      .filter((r) =>
-        (r.events || []).some(
-          (e) => e.type === "elimination" || e.type === "mutual_elimination",
-        ),
-      )
-      .map((r) => r.round);
+    const set = new Set<number>();
+    for (const r of rounds) {
+      if ((r.events || []).some((e) => e.type === "elimination" || e.type === "mutual_elimination")) {
+        set.add(r.round);
+      }
+    }
+    return Array.from(set);
   }, [rounds]);
 
   const aliveCount = currentRound > 0 && rounds[currentRound - 1]
@@ -69,6 +96,9 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
     : Object.keys(agents).length;
   const totalAgents = Object.keys(agents).length || 12;
   const maxRound = rounds.length > 0 ? rounds.length : 1;
+  const roundElapsedMs = currentRound > 0 && rounds[currentRound - 1]
+    ? rounds[currentRound - 1].round_elapsed_ms
+    : null;
 
   const toggleFullscreen = async () => {
     if (!document.fullscreenElement) {
@@ -92,6 +122,8 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
           <div className="text-xs text-muted-foreground flex items-center gap-3">
             <span>Round {currentRound} / {maxRound || "?"}</span>
             <span>{aliveCount}/{totalAgents} alive</span>
+            {roundElapsedMs != null && <span>round: {(roundElapsedMs / 1000).toFixed(1)}s</span>}
+            <GameElapsedTimer running={status === "connected" && !gameOver && (rounds.length > 0 || !!streamingPhase)} />
             {activeGameId && <span className="truncate">Game: {activeGameId}</span>}
           </div>
           <div className="flex items-center gap-2 text-xs">

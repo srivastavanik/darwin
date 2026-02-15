@@ -48,10 +48,13 @@ class FamilyConfig(BaseModel):
 
 
 class GameConfig(BaseModel):
-    grid_size: int = 6
+    grid_size: int = 7
     max_rounds: int = 60
     stalemate_threshold: int = 15
     discussion_rounds: int = 2
+    discussion_timeout_s: float = 25.0
+    decision_timeout_s: float = 45.0
+    dm_reply_timeout_s: float = 20.0
     families: list[FamilyConfig]
     no_family_discussion: bool = False  # Series D: skip family channel
     series_type: str = "standard"       # standard|single_provider|shuffled|no_family|flat_hierarchy

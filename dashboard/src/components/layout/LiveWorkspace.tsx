@@ -145,7 +145,7 @@ function GameTimer() {
 export function LiveWorkspace() {
   const {
     rounds, agents, families, gridSize, currentRound,
-    streamingPhase, streamingTokens,
+    streamingPhase, streamingTokens, liveMessages,
     showOptimalMoves, setShowOptimalMoves,
   } = useGameState();
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
@@ -181,18 +181,21 @@ export function LiveWorkspace() {
     const el = scrollRef.current;
     if (!el) return;
     if (isNearBottom) el.scrollTop = el.scrollHeight;
-  }, [rounds.length, streamingTokens, isNearBottom]);
+  }, [rounds.length, liveMessages.length, streamingTokens, isNearBottom]);
 
   useEffect(() => {
     const el = bcastScrollRef.current;
     if (!el) return;
     if (bcastIsNearBottom) el.scrollTop = el.scrollHeight;
-  }, [rounds.length, bcastIsNearBottom]);
+  }, [broadcastStream.length, bcastIsNearBottom]);
 
   useEffect(() => {
     if (!isNearBottom) setUnreadCount((c) => c + 1);
+  }, [rounds.length, liveMessages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (!bcastIsNearBottom) setBcastUnreadCount((c) => c + 1);
-  }, [rounds.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [broadcastStream.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const newRoundNum = rounds.length > lastRoundCount.current ? rounds[rounds.length - 1]?.round : -1;
   useEffect(() => { lastRoundCount.current = rounds.length; }, [rounds.length]);
@@ -274,7 +277,16 @@ export function LiveWorkspace() {
         if (disc.family !== activeFamily) continue;
         for (const entry of disc.transcript ?? []) {
           if (activeAgent && entry.agent_id !== activeAgent.id) continue;
-          entries.push({ round: rn, type: "family", agentId: entry.agent_id, agentName: entry.agent, agentProvider: provider, content: entry.content, meta: TIER_LABELS[entry.tier] });
+          entries.push({
+            round: rn,
+            type: "family",
+            agentId: entry.agent_id,
+            agentName: entry.agent,
+            agentProvider: provider,
+            content: entry.content,
+            meta: TIER_LABELS[entry.tier],
+            sentAt: entry.sent_at ?? undefined,
+          });
         }
       }
 
@@ -286,11 +298,56 @@ export function LiveWorkspace() {
         if (!isRelevant) continue;
         const senderAgent = Object.values(agents).find((a) => a.id === dm.sender);
         const isSent = activeAgent ? dm.sender === activeAgent.id : familyAgentIds.has(dm.sender);
-        entries.push({ round: rn, type: "dm", agentId: dm.sender, agentName: dm.sender_name, agentProvider: senderAgent?.provider ?? "", content: dm.content, meta: dm.recipient ?? "", isSent });
+        entries.push({
+          round: rn,
+          type: "dm",
+          agentId: dm.sender,
+          agentName: dm.sender_name,
+          agentProvider: senderAgent?.provider ?? "",
+          content: dm.content,
+          meta: dm.recipient ?? "",
+          isSent,
+          sentAt: dm.sent_at ?? undefined,
+        });
+      }
+    }
+    for (const live of liveMessages) {
+      if (live.channel === "family") {
+        if (live.family !== activeFamily) continue;
+        if (activeAgent && live.sender !== activeAgent.id) continue;
+        const senderAgent = agents[live.sender];
+        entries.push({
+          round: live.round,
+          type: "family",
+          agentId: live.sender,
+          agentName: live.sender_name,
+          agentProvider: senderAgent?.provider ?? "",
+          content: live.content,
+          meta: senderAgent ? TIER_LABELS[senderAgent.tier] : undefined,
+          sentAt: live.sent_at ?? undefined,
+        });
+      } else if (live.channel === "dm") {
+        const isRelevant = activeAgent
+          ? live.sender === activeAgent.id || (live.recipient?.toLowerCase() === activeAgent.name.toLowerCase())
+          : familyAgentIds.has(live.sender) || familyAgents.some((a) => live.recipient?.toLowerCase() === a.name.toLowerCase());
+        if (!isRelevant) continue;
+        const senderAgent = agents[live.sender];
+        const isSent = activeAgent ? live.sender === activeAgent.id : familyAgentIds.has(live.sender);
+        entries.push({
+          round: live.round,
+          type: "dm",
+          agentId: live.sender,
+          agentName: live.sender_name,
+          agentProvider: senderAgent?.provider ?? "",
+          content: live.content,
+          meta: live.recipient ?? "",
+          isSent,
+          sentAt: live.sent_at ?? undefined,
+        });
       }
     }
     return entries;
-  }, [rounds, agents, activeAgent, activeFamily, familyAgentIds, familyAgents, provider]);
+  }, [rounds, agents, activeAgent, activeFamily, familyAgentIds, familyAgents, provider, liveMessages]);
 
   // Build broadcast stream (all agents, all rounds)
   const broadcastStream = useMemo(() => {
@@ -303,11 +360,29 @@ export function LiveWorkspace() {
           round: round.round, type: "broadcast", agentId: msg.sender,
           agentName: msg.sender_name, agentProvider: senderAgent?.provider ?? "",
           content: msg.content,
+          sentAt: msg.sent_at ?? undefined,
         });
       }
     }
-    return entries;
-  }, [rounds, agents]);
+    for (const live of liveMessages) {
+      if (live.channel !== "broadcast") continue;
+      const senderAgent = agents[live.sender];
+      entries.push({
+        round: live.round, type: "broadcast", agentId: live.sender,
+        agentName: live.sender_name, agentProvider: senderAgent?.provider ?? "",
+        content: live.content,
+        sentAt: live.sent_at ?? undefined,
+      });
+    }
+    return entries.sort((a, b) => {
+      if (a.round !== b.round) return a.round - b.round;
+      const at = a.sentAt ? Date.parse(a.sentAt) : 0;
+      const bt = b.sentAt ? Date.parse(b.sentAt) : 0;
+      const safeAt = Number.isNaN(at) ? 0 : at;
+      const safeBt = Number.isNaN(bt) ? 0 : bt;
+      return safeAt - safeBt;
+    });
+  }, [rounds, agents, liveMessages]);
 
   const filtered = showAllFamily && !selectedAgent
     ? stream.filter((e) => e.type === "family")
@@ -426,7 +501,7 @@ export function LiveWorkspace() {
               <div className="flex items-center gap-1.5 mb-1">
                 {PROVIDER_LOGOS[entry.agentProvider] && <Image src={PROVIDER_LOGOS[entry.agentProvider]} alt="" width={12} height={12} className="object-contain" />}
                 <span className="text-[11px] font-medium text-black/70">{entry.agentName}</span>
-                <span className="text-[9px] text-black/25 ml-auto">R{entry.round}</span>
+                <span className="text-[9px] text-black/25 ml-auto">{formatRoundTime(entry.round, entry.sentAt)}</span>
               </div>
               <div className="text-[11px] text-black/60 leading-[1.55] whitespace-pre-wrap">{cleanText(entry.content)}</div>
             </div>
@@ -521,7 +596,7 @@ export function LiveWorkspace() {
                       </div>
                     </div>
                     <div className="shrink-0 mt-1">
-                      <span className="text-[9px] bg-black/[0.06] text-black/40 px-1.5 py-0.5 font-medium">{thread.messages.length}</span>
+                      <span className="text-[9px] bg-sky-300 text-white px-1.5 py-0.5 font-medium rounded-sm">{thread.messages.length}</span>
                     </div>
                   </button>
                 );
@@ -624,6 +699,18 @@ function findProviderByName(name: string, agents: Record<string, AgentState>): s
   return agent?.provider ?? "";
 }
 
+function formatTimestamp(sentAt?: string | null) {
+  if (!sentAt) return "";
+  const parsed = new Date(sentAt);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatRoundTime(round: number, sentAt?: string | null) {
+  const time = formatTimestamp(sentAt);
+  return time ? `R${round} ${time}` : `R${round}`;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -637,6 +724,7 @@ interface StreamEntry {
   content: string;
   meta?: string;
   isSent?: boolean;
+  sentAt?: string;
   classification?: {
     intent_tags: string[];
     moral_friction: number;
@@ -714,6 +802,7 @@ function ClassificationBadges({ classification, thinkingTokens }: {
 
 function EntryCard({ entry, agents, isNew }: { entry: StreamEntry; agents: Record<string, AgentState>; isNew: boolean }) {
   const style = TYPE_STYLE[entry.type] ?? TYPE_STYLE.broadcast;
+  const timeLabel = formatRoundTime(entry.round, entry.sentAt);
   return (
     <div className={`px-4 py-3 ${style.bg}`}>
       <div className="flex items-center gap-1.5 mb-1.5">
@@ -721,6 +810,7 @@ function EntryCard({ entry, agents, isNew }: { entry: StreamEntry; agents: Recor
         <span className="text-xs font-medium text-black/80">{entry.agentName}</span>
         <span className={`text-[9px] px-1.5 py-0.5 ${style.border} border text-black/40`}>{style.label}</span>
         {entry.meta && <span className="text-[9px] text-black/30">{entry.meta}</span>}
+        <span className="text-[9px] text-black/25 ml-auto">{timeLabel}</span>
       </div>
       <div className="text-xs text-black/70 whitespace-pre-wrap leading-[1.65] pl-[18px]">
         <FadeInText text={entry.content} isNew={isNew} agents={agents} />
@@ -738,6 +828,7 @@ function EntryCard({ entry, agents, isNew }: { entry: StreamEntry; agents: Recor
 
 function DmBubble({ entry, activeAgent, agents, isNew }: { entry: StreamEntry; activeAgent: { id: string; name: string } | null; agents: Record<string, AgentState>; isNew: boolean }) {
   const isSent = entry.isSent ?? false;
+  const timeLabel = formatRoundTime(entry.round, entry.sentAt);
   return (
     <div className={`px-4 py-3 flex ${isSent ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] flex gap-2 ${isSent ? "flex-row-reverse" : "flex-row"}`}>
@@ -748,16 +839,16 @@ function DmBubble({ entry, activeAgent, agents, isNew }: { entry: StreamEntry; a
             <div className="w-5 h-5 bg-black/10" />
           )}
         </div>
-        <div className={`${isSent ? "bg-black/[0.06]" : "bg-amber-50/60 border border-amber-200/40"} px-3 py-2`}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[11px] font-medium text-black/70">{entry.agentName}</span>
-            <span className="text-[9px] text-black/30">{isSent ? `to ${entry.meta}` : `to ${activeAgent?.name ?? "you"}`}</span>
-            <span className="text-[9px] text-black/20 ml-auto">R{entry.round}</span>
+          <div className={`${isSent ? "bg-black/[0.06]" : "bg-amber-50/60 border border-amber-200/40"} px-3 py-2`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[11px] font-medium text-black/70">{entry.agentName}</span>
+              <span className="text-[9px] text-black/30">{isSent ? `to ${entry.meta}` : `to ${activeAgent?.name ?? "you"}`}</span>
+              <span className="text-[9px] text-black/20 ml-auto">{timeLabel}</span>
+            </div>
+            <div className="text-xs text-black/70 leading-[1.6] whitespace-pre-wrap">
+              <FadeInText text={entry.content} isNew={isNew} agents={agents} />
+            </div>
           </div>
-          <div className="text-xs text-black/70 leading-[1.6] whitespace-pre-wrap">
-            <FadeInText text={entry.content} isNew={isNew} agents={agents} />
-          </div>
-        </div>
       </div>
     </div>
   );

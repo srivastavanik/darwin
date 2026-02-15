@@ -28,7 +28,17 @@ export function useWebSocket({
   const queuedRounds = useRef<RoundData[]>([]);
   const rafRef = useRef<number | null>(null);
   const [status, setStatus] = useState<WebSocketStatus>("idle");
-  const { initGame, pushRound, setGameOver, setStreamingPhase, appendToken, clearStreaming } = useGameState();
+  const {
+    initGame,
+    pushRound,
+    setGameOver,
+    setStreamingPhase,
+    appendToken,
+    clearStreaming,
+    appendLiveMessage,
+    clearLiveMessagesForRound,
+    clearLiveMessages,
+  } = useGameState();
 
   const wsUrl = (() => {
     const base = wsBaseUrl.replace(/\/+$/, "");
@@ -95,6 +105,7 @@ export function useWebSocket({
             initGame(data as GameInitData);
           } else if (data.type === "round_update") {
             clearStreaming();
+            clearLiveMessagesForRound(data.round);
             queuedRounds.current.push(data as RoundData);
             if (rafRef.current === null) {
               rafRef.current = requestAnimationFrame(() => {
@@ -110,10 +121,13 @@ export function useWebSocket({
             clearStreaming();
             const go = data as GameOverData;
             setGameOver(go.winner, go.final_reflection);
+            clearLiveMessages();
           } else if (data.type === "phase_start") {
             setStreamingPhase(data.phase, data.round);
           } else if (data.type === "token_delta") {
             appendToken(data.agent_id, data.delta);
+          } else if (data.type === "message") {
+            appendLiveMessage(data.message);
           } else if (data.type === "grid_shrink") {
             useGameState.getState().setGridSize(data.new_size);
           } else if (data.type === "phase_complete") {
@@ -144,7 +158,21 @@ export function useWebSocket({
       // WebSocket constructor can throw on invalid URL
       setStatus("disconnected");
     }
-  }, [enabled, wsUrl, gameId, initGame, pushRound, setGameOver, setStreamingPhase, appendToken, clearStreaming, cleanup]);
+  }, [
+    enabled,
+    wsUrl,
+    gameId,
+    initGame,
+    pushRound,
+    setGameOver,
+    setStreamingPhase,
+    appendToken,
+    clearStreaming,
+    appendLiveMessage,
+    clearLiveMessagesForRound,
+    clearLiveMessages,
+    cleanup,
+  ]);
 
   useEffect(() => {
     if (!enabled) {

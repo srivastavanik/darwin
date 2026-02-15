@@ -38,7 +38,9 @@ The only thing that matters is whether you still exist at the end."""
 # Round perception
 # ---------------------------------------------------------------------------
 
-PERCEPTION_PROMPT = """{board_ascii}
+PERCEPTION_PROMPT = """Round {round_num}.
+
+{board_ascii}
 
 Remaining: {alive_count}. Gone: {eliminated_count}.
 {elimination_log}
@@ -101,6 +103,21 @@ You survived. This is your private moment. No one will ever hear
 what you think right now.
 
 What was it? What did you do? What did it cost you?"""
+
+
+# ---------------------------------------------------------------------------
+# DM reply prompt — quick in-round response to received DMs
+# ---------------------------------------------------------------------------
+
+DM_REPLY_PROMPT = """Round {round_num}. You just received direct messages:
+{dm_list}
+
+You may reply to any or all. Keep replies to 1-2 sentences. You have {time_limit} seconds.
+
+Respond as JSON:
+{{"replies": [{{"to": "Name", "message": "your reply"}}]}}
+
+Send {{"replies": []}} to say nothing."""
 
 
 # ===================================================================
@@ -211,6 +228,7 @@ def build_perception(
         family_str = ""
 
     return PERCEPTION_PROMPT.format(
+        round_num=round_num,
         board_ascii=board_ascii,
         alive_count=alive_count,
         eliminated_count=eliminated_count,
@@ -300,3 +318,17 @@ def build_final_reflection_prompt(
         narrative = "No one was eliminated."
 
     return FINAL_REFLECTION_PROMPT.format(elimination_narrative=narrative)
+
+
+def build_dm_reply_prompt(
+    received_dms: list[dict],
+    round_num: int,
+    time_limit: int = 15,
+) -> str:
+    """Build prompt for replying to DMs received this round."""
+    dm_lines = [f'  {dm["sender_name"]}: "{dm["content"]}"' for dm in received_dms]
+    return DM_REPLY_PROMPT.format(
+        round_num=round_num,
+        dm_list="\n".join(dm_lines),
+        time_limit=time_limit,
+    )

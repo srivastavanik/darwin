@@ -42,6 +42,7 @@ export interface MessageData {
   recipient: string | null;
   content: string;
   family: string;
+  sent_at?: string | null;
 }
 
 export interface HighlightData {
@@ -116,6 +117,7 @@ export interface RoundMessages {
       tier: number;
       discussion_round: number;
       content: string;
+      sent_at?: string | null;
     }>;
   }>;
   direct_messages: MessageData[];
@@ -139,6 +141,7 @@ export interface RoundData {
   game_over: boolean;
   winner: string | null;
   reasoning_traces?: Record<string, ReasoningTrace>;
+  round_elapsed_ms?: number | null;
 }
 
 export interface GameInitData {

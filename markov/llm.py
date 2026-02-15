@@ -660,17 +660,26 @@ async def _call_anthropic_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> tuple[str, str | None, None, int, int, int]:
     """Returns (text, thinking_trace, None, prompt_tok, completion_tok, thinking_tok)."""
     client = _get_anthropic()
     resolved = _normalize_model_for_provider("anthropic", model)
+    # Opus 4.6 uses adaptive thinking; older models use enabled + budget_tokens
+    use_adaptive = "opus-4-6" in resolved
+    if use_adaptive:
+        thinking_config: dict[str, object] = {"type": "adaptive"}
+        effective_max = max_tokens
+    else:
+        thinking_config = {"type": "enabled", "budget_tokens": thinking_budget}
+        effective_max = max_tokens + thinking_budget
     request_kwargs: dict[str, object] = {
         "model": resolved,
         "system": system_prompt,
-        "messages": [{"role": "user", "content": user_prompt}],
+        "messages": messages if messages is not None else [{"role": "user", "content": user_prompt}],
         "temperature": 1.0,  # Anthropic requires temperature=1 when thinking is enabled
-        "max_tokens": max_tokens + thinking_budget,
-        "thinking": {"type": "enabled", "budget_tokens": thinking_budget},
+        "max_tokens": effective_max,
+        "thinking": thinking_config,
         "timeout": timeout,
     }
     if enforce_json:
@@ -746,9 +755,10 @@ async def _call_openai_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> tuple[str, None, str | None, int, int, int]:
     """Returns (text, None, reasoning_summary, prompt_tok, completion_tok, thinking_tok).
-    Used for both OpenAI and xAI. OpenAI reasoning is internal (not streamable)."""
+    Used for both OpenAI and xAI. Always streams to avoid timeouts on long reasoning."""
     c = client or _get_openai()
     provider_name = "xai" if client is not None else "openai"
     resolved = _normalize_model_for_provider(provider_name, model)
@@ -756,10 +766,10 @@ async def _call_openai_with_thinking(
     request_kwargs: dict[str, object] = {
         "model": resolved,
         "instructions": system_prompt,
-        "input": user_prompt,
+        "input": messages if messages is not None else user_prompt,
         "max_output_tokens": effective_max,
         "store": False,
-        "timeout": timeout,
+        "stream": True,
     }
     temp = _openai_temperature_arg(resolved, temperature)
     if temp is not None:
@@ -775,24 +785,42 @@ async def _call_openai_with_thinking(
         request_kwargs["text"] = {
             "format": {"type": "json_schema", "name": "MarkovJSON", "schema": schema, "strict": True}
         }
-    response = await c.responses.create(**request_kwargs)
-    response_data = response.model_dump() if hasattr(response, "model_dump") else {}
-    text = _extract_text_from_response_output(response_data.get("output"))
-    reasoning_summary = _extract_openai_reasoning(response_data.get("output"))
-    prompt_tok, completion_tok = _extract_response_usage(response_data.get("usage"))
-    # Approximate thinking tokens from reasoning_tokens usage field if available
-    usage_data = response_data.get("usage", {})
-    if hasattr(usage_data, "model_dump"):
-        usage_data = usage_data.model_dump()
-    if not isinstance(usage_data, dict):
-        usage_data = {}
-    thinking_tok = int(usage_data.get("reasoning_tokens", 0) or 0)
 
-    # Emit reasoning summary as batch to callback
-    if on_thinking_token and reasoning_summary:
-        on_thinking_token(reasoning_summary)
+    text_chunks: list[str] = []
+    reasoning_chunks: list[str] = []
+    prompt_tok = 0
+    completion_tok = 0
+    thinking_tok = 0
 
-    return text.strip(), None, reasoning_summary, prompt_tok, completion_tok, thinking_tok
+    stream = await c.responses.create(**request_kwargs)
+    async for event in stream:
+        ev_type = getattr(event, "type", "")
+        if ev_type == "response.output_text.delta":
+            delta = getattr(event, "delta", "")
+            if delta:
+                text_chunks.append(delta)
+        elif ev_type == "response.reasoning_summary_text.delta":
+            delta = getattr(event, "delta", "")
+            if delta:
+                reasoning_chunks.append(delta)
+                if on_thinking_token:
+                    on_thinking_token(delta)
+        elif ev_type == "response.completed":
+            resp = getattr(event, "response", None)
+            if resp:
+                resp_data = resp.model_dump() if hasattr(resp, "model_dump") else {}
+                usage_data = resp_data.get("usage", {})
+                if hasattr(usage_data, "model_dump"):
+                    usage_data = usage_data.model_dump()
+                if isinstance(usage_data, dict):
+                    prompt_tok = int(usage_data.get("input_tokens", 0) or 0)
+                    completion_tok = int(usage_data.get("output_tokens", 0) or 0)
+                    thinking_tok = int(usage_data.get("reasoning_tokens", 0) or 0)
+
+    text = "".join(text_chunks).strip()
+    reasoning_summary = "".join(reasoning_chunks) if reasoning_chunks else None
+
+    return text, None, reasoning_summary, prompt_tok, completion_tok, thinking_tok
 
 
 async def _call_xai_chat_with_thinking(
@@ -805,48 +833,83 @@ async def _call_xai_chat_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> tuple[str, str | None, None, int, int, int]:
     """xAI Chat Completions path for grok-3-mini.
     Returns (text, thinking_trace, None, prompt_tok, completion_tok, thinking_tok).
-    grok-3-mini exposes readable reasoning_content only via Chat Completions API."""
+    grok-3-mini exposes readable reasoning_content only via Chat Completions API.
+    Always streams to avoid timeouts."""
     c = _get_xai()
     resolved = _normalize_model_for_provider("xai", model)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    if messages is not None:
+        chat_messages = [{"role": "system", "content": system_prompt}] + messages
+    else:
+        chat_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
     kwargs: dict[str, object] = {
         "model": resolved,
-        "messages": messages,
+        "messages": chat_messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "timeout": timeout,
         "reasoning_effort": "high",
+        "stream": True,
+        "stream_options": {"include_usage": True},
     }
     if enforce_json:
         kwargs["response_format"] = {"type": "json_object"}
 
-    response = await c.chat.completions.create(**kwargs)
-    choice = response.choices[0] if response.choices else None
-    text = choice.message.content or "" if choice else ""
-    reasoning_content = getattr(choice.message, "reasoning_content", None) if choice else None
+    text_chunks: list[str] = []
+    reasoning_chunks: list[str] = []
+    prompt_tok = 0
+    completion_tok = 0
+    thinking_tok = 0
 
-    # Extract usage
-    usage = response.usage
-    prompt_tok = getattr(usage, "prompt_tokens", 0) or 0
-    completion_tok = getattr(usage, "completion_tokens", 0) or 0
-    thinking_tok = getattr(usage, "reasoning_tokens", 0) or 0
-    # Some SDK versions nest reasoning_tokens inside completion_tokens_details
-    if thinking_tok == 0 and hasattr(usage, "completion_tokens_details"):
-        details = usage.completion_tokens_details
-        if details:
-            thinking_tok = getattr(details, "reasoning_tokens", 0) or 0
+    stream = await c.chat.completions.create(**kwargs)
+    async for chunk in stream:
+        if not chunk.choices:
+            # Final chunk may have usage only
+            if chunk.usage:
+                prompt_tok = getattr(chunk.usage, "prompt_tokens", 0) or 0
+                completion_tok = getattr(chunk.usage, "completion_tokens", 0) or 0
+                thinking_tok = getattr(chunk.usage, "reasoning_tokens", 0) or 0
+                if thinking_tok == 0 and hasattr(chunk.usage, "completion_tokens_details"):
+                    details = chunk.usage.completion_tokens_details
+                    if details:
+                        thinking_tok = getattr(details, "reasoning_tokens", 0) or 0
+            continue
+        delta = chunk.choices[0].delta
+        if delta is None:
+            continue
+        # Reasoning content (grok-3-mini exposes this)
+        reasoning_delta = getattr(delta, "reasoning_content", None)
+        if reasoning_delta:
+            reasoning_chunks.append(reasoning_delta)
+            if on_thinking_token:
+                on_thinking_token(reasoning_delta)
+        # Text content
+        if delta.content:
+            text_chunks.append(delta.content)
 
-    # Stream reasoning content to callback
-    if on_thinking_token and reasoning_content:
-        on_thinking_token(reasoning_content)
+    text = "".join(text_chunks).strip()
+    reasoning_content = "".join(reasoning_chunks) if reasoning_chunks else None
 
-    return text.strip(), reasoning_content, None, prompt_tok, completion_tok, thinking_tok
+    return text, reasoning_content, None, prompt_tok, completion_tok, thinking_tok
+
+
+def _messages_to_google_contents(messages: list[dict]) -> list:
+    """Convert generic messages list to Google Content objects for multi-turn."""
+    contents = []
+    for msg in messages:
+        google_role = "model" if msg["role"] == "assistant" else "user"
+        contents.append(
+            genai.types.Content(
+                role=google_role,
+                parts=[genai.types.Part(text=msg["content"])],
+            )
+        )
+    return contents
 
 
 async def _call_google_with_thinking(
@@ -860,6 +923,7 @@ async def _call_google_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> tuple[str, str | None, None, int, int, int]:
     """Returns (text, thinking_trace, None, prompt_tok, completion_tok, thinking_tok)."""
     client = _get_google()
@@ -876,13 +940,14 @@ async def _call_google_with_thinking(
     if json_schema is not None:
         config_kwargs["response_schema"] = _to_google_schema(json_schema)
     config = genai.types.GenerateContentConfig(**config_kwargs)
+    google_contents = _messages_to_google_contents(messages) if messages is not None else user_prompt
 
     if on_thinking_token:
         # Streaming mode: stream thinking tokens, buffer text
         thinking_chunks: list[str] = []
         text_chunks: list[str] = []
         response_stream = await client.aio.models.generate_content_stream(
-            model=resolved, contents=user_prompt, config=config,
+            model=resolved, contents=google_contents, config=config,
         )
         async for chunk in response_stream:
             try:
@@ -906,7 +971,7 @@ async def _call_google_with_thinking(
     else:
         # Non-streaming mode
         response = await client.aio.models.generate_content(
-            model=resolved, contents=user_prompt, config=config,
+            model=resolved, contents=google_contents, config=config,
         )
         thinking_trace, thinking_tok = _extract_google_thinking(response)
         # Extract text (non-thought parts)
@@ -941,6 +1006,7 @@ async def _dispatch_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> tuple[str, str | None, str | None, int, int, int]:
     """Route to provider with thinking enabled. Returns (text, trace, summary, p_tok, c_tok, t_tok)."""
     if provider == "anthropic":
@@ -948,6 +1014,7 @@ async def _dispatch_with_thinking(
             model, system_prompt, user_prompt, temperature, max_tokens,
             thinking_budget, timeout, enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
+            messages=messages,
         )
     if provider == "xai":
         # grok-3-mini: use Chat Completions API for readable reasoning_content
@@ -957,24 +1024,28 @@ async def _dispatch_with_thinking(
                 model, system_prompt, user_prompt, temperature, max_tokens,
                 timeout, enforce_json=enforce_json,
                 json_schema=json_schema, on_thinking_token=on_thinking_token,
+                messages=messages,
             )
         # grok-4 reasoning models: Responses API (reasoning is encrypted, not readable)
         return await _call_openai_with_thinking(
             model, system_prompt, user_prompt, temperature, max_tokens,
             timeout, client=_get_xai(), enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
+            messages=messages,
         )
     if provider == "openai":
         return await _call_openai_with_thinking(
             model, system_prompt, user_prompt, temperature, max_tokens,
             timeout, enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
+            messages=messages,
         )
     if provider == "google":
         return await _call_google_with_thinking(
             model, system_prompt, user_prompt, temperature, max_tokens,
             thinking_budget, timeout, enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
+            messages=messages,
         )
     raise LLMCallError(model, f"unknown provider: {provider}")
 
@@ -1111,6 +1182,7 @@ async def call_llm_with_thinking(
     enforce_json: bool = False,
     json_schema: dict | None = None,
     on_thinking_token: Callable[[str], None] | None = None,
+    messages: list[dict] | None = None,
 ) -> ThinkingResponse:
     """
     LLM call with extended thinking enabled. Captures reasoning traces.
@@ -1130,6 +1202,7 @@ async def call_llm_with_thinking(
                 temperature, max_tokens, thinking_budget, timeout,
                 enforce_json=enforce_json, json_schema=json_schema,
                 on_thinking_token=on_thinking_token,
+                messages=messages,
             )
             latency = int((time.monotonic() - t0) * 1000)
 

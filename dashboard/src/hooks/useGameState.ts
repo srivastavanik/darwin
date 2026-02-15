@@ -6,8 +6,20 @@ import type {
   FamilyConfig,
   GameInitData,
   RoundData,
+  MessageData,
 } from "@/lib/types";
 import { getFamilyColor } from "@/lib/colors";
+
+function liveMessageKey(message: MessageData) {
+  return [
+    message.sent_at ?? "",
+    message.round,
+    message.sender,
+    message.channel,
+    message.recipient ?? "",
+    message.content,
+  ].join("|");
+}
 
 interface GameStore {
   // State
@@ -40,6 +52,7 @@ interface GameStore {
   streamingPhase: string | null;
   streamingRound: number;
   streamingTokens: Record<string, string>; // agent_id -> accumulated text
+  liveMessages: MessageData[];
 
   // Actions
   initGame: (data: GameInitData) => void;
@@ -67,6 +80,9 @@ interface GameStore {
   setStreamingPhase: (phase: string | null, round?: number) => void;
   appendToken: (agentId: string, delta: string) => void;
   clearStreaming: () => void;
+  appendLiveMessage: (message: MessageData) => void;
+  clearLiveMessagesForRound: (round: number) => void;
+  clearLiveMessages: () => void;
   setGridSize: (size: number) => void;
   reset: () => void;
 }
@@ -97,6 +113,7 @@ export const useGameState = create<GameStore>((set, get) => ({
   streamingPhase: null,
   streamingRound: 0,
   streamingTokens: {},
+  liveMessages: [],
   gameJson: null,
   activeGameId: null,
 
@@ -123,6 +140,7 @@ export const useGameState = create<GameStore>((set, get) => ({
       finalReflection: null,
       totalRounds: data.total_rounds || null,
       activeGameId: data.game_id || null,
+      liveMessages: [],
       focusedAgentIds: [],
       channelFilter: "reasoning",
       highlightsOnly: false,
@@ -189,6 +207,16 @@ export const useGameState = create<GameStore>((set, get) => ({
     },
   })),
   clearStreaming: () => set({ streamingPhase: null, streamingTokens: {}, streamingRound: 0 }),
+  appendLiveMessage: (message) => set((s) => {
+    if (s.rounds.some((r) => r.round === message.round)) return s;
+    const key = liveMessageKey(message);
+    if (s.liveMessages.some((m) => liveMessageKey(m) === key)) return s;
+    return { liveMessages: [...s.liveMessages, message] };
+  }),
+  clearLiveMessagesForRound: (round) => set((s) => ({
+    liveMessages: s.liveMessages.filter((m) => m.round !== round),
+  })),
+  clearLiveMessages: () => set({ liveMessages: [] }),
   setGridSize: (size) => set({ gridSize: size }),
   reset: () =>
     set({
@@ -217,5 +245,6 @@ export const useGameState = create<GameStore>((set, get) => ({
       streamingPhase: null,
       streamingRound: 0,
       streamingTokens: {},
+      liveMessages: [],
     }),
 }));

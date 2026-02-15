@@ -79,9 +79,9 @@ export function useGameController() {
     void load();
   }, [refreshGames]);
 
-  // Polling: 5s when API is up, 15s when down
+  // Polling: 15s when API is up, 30s when down (WebSocket handles real-time updates)
   useEffect(() => {
-    const interval = apiUp ? 5000 : 15000;
+    const interval = apiUp ? 15000 : 30000;
     const timer = setInterval(() => void refreshGames(), interval);
     return () => clearInterval(timer);
   }, [refreshGames, apiUp]);
