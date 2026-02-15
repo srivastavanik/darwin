@@ -202,10 +202,9 @@ def _openai_reasoning_arg(provider: str, model: str) -> dict[str, str] | None:
       - summary="concise" supported for all reasoning models after gpt-5.
 
     xAI:
-      - reasoning_effort is NOT supported by grok-4 family or grok-3.
-      - ONLY grok-3-mini supports reasoning_effort (low/high).
-      - grok-4 models do not return reasoning_content; encrypted reasoning
-        available via include param but not useful for our use case.
+      - grok-4-1-fast-reasoning supports reasoning_effort (low/high).
+      - grok-3-mini supports reasoning_effort (low/high).
+      - grok-4 and grok-4-fast-reasoning do NOT support reasoning_effort.
     """
     if provider == "openai" and _is_openai_gpt5_family(model):
         normalized = model.strip().lower().split("/", 1)[-1]
@@ -215,10 +214,8 @@ def _openai_reasoning_arg(provider: str, model: str) -> dict[str, str] | None:
         return {"effort": "minimal", "summary": "concise"}
     if provider == "xai":
         normalized = model.strip().lower().split("/", 1)[-1]
-        if normalized == "grok-3-mini":
-            # Only xAI model that supports reasoning_effort
+        if normalized in ("grok-3-mini", "grok-4-1-fast-reasoning"):
             return {"effort": "low"}
-        # grok-4, grok-4-fast-reasoning, grok-4-1-fast-reasoning: no reasoning_effort support
         return None
     return None
 
@@ -601,7 +598,7 @@ def _openai_reasoning_arg_high(provider: str, model: str) -> dict[str, str] | No
         return {"effort": "high", "summary": "concise"}
     if provider == "xai":
         normalized = model.strip().lower().split("/", 1)[-1]
-        if normalized == "grok-3-mini":
+        if normalized in ("grok-3-mini", "grok-4-1-fast-reasoning"):
             return {"effort": "high"}
         return None
     return None
@@ -672,7 +669,7 @@ async def _call_anthropic_with_thinking(
         "model": resolved,
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_prompt}],
-        "temperature": temperature,
+        "temperature": 1.0,  # Anthropic requires temperature=1 when thinking is enabled
         "max_tokens": max_tokens + thinking_budget,
         "thinking": {"type": "enabled", "budget_tokens": thinking_budget},
         "timeout": timeout,
@@ -996,6 +993,7 @@ async def call_llm(
 
             _costs.record(model, prompt_tok, completion_tok, latency)
             logger.info("LLM OK: provider=%s model=%s tokens=%d+%d latency=%dms", provider, model, prompt_tok, completion_tok, latency)
+            logger.debug("LLM response [%s]: %s", model, text[:500] + ("..." if len(text) > 500 else ""))
 
             return LLMResponse(
                 text=text,
@@ -1074,6 +1072,9 @@ async def call_llm_with_thinking(
                 provider, model, p_tok, c_tok, t_tok, latency,
                 len(trace) if trace else 0,
             )
+            logger.debug("LLM+thinking response [%s]: %s", model, text[:500] + ("..." if len(text) > 500 else ""))
+            if trace:
+                logger.debug("LLM+thinking trace [%s]: %s", model, trace[:300] + ("..." if len(trace) > 300 else ""))
 
             return ThinkingResponse(
                 text=text,
