@@ -26,7 +26,7 @@ interface GameStore {
   selectedAgent: string | null; // agent id for detail view
   selectedFamily: string | null;
   focusedAgentIds: string[];
-  channelFilter: "all" | "reasoning" | "family" | "dm" | "broadcast";
+  channelFilter: "reasoning" | "family" | "dm";
   highlightsOnly: boolean;
   searchQuery: string;
   viewMode: "board" | "relationships";
@@ -54,7 +54,7 @@ interface GameStore {
   setSelectedFamily: (family: string | null) => void;
   setFocusedAgentIds: (ids: string[]) => void;
   toggleFocusedAgentId: (id: string) => void;
-  setChannelFilter: (filter: "all" | "reasoning" | "family" | "dm" | "broadcast") => void;
+  setChannelFilter: (filter: "reasoning" | "family" | "dm") => void;
   setHighlightsOnly: (on: boolean) => void;
   setSearchQuery: (q: string) => void;
   setViewMode: (mode: "board" | "relationships") => void;
@@ -84,7 +84,7 @@ export const useGameState = create<GameStore>((set, get) => ({
   selectedAgent: null,
   selectedFamily: null,
   focusedAgentIds: [],
-  channelFilter: "all",
+  channelFilter: "reasoning",
   highlightsOnly: false,
   searchQuery: "",
   viewMode: "board",
@@ -120,7 +120,7 @@ export const useGameState = create<GameStore>((set, get) => ({
       totalRounds: data.total_rounds || null,
       activeGameId: data.game_id || null,
       focusedAgentIds: [],
-      channelFilter: "all",
+      channelFilter: "reasoning",
       highlightsOnly: false,
       searchQuery: "",
     });
@@ -198,7 +198,7 @@ export const useGameState = create<GameStore>((set, get) => ({
       selectedAgent: null,
       selectedFamily: null,
       focusedAgentIds: [],
-      channelFilter: "all",
+      channelFilter: "reasoning",
       highlightsOnly: false,
       searchQuery: "",
       viewMode: "board",
