@@ -16,13 +16,13 @@ from urllib.parse import parse_qs, urlparse
 import websockets
 from websockets.server import ServerConnection
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.family import Family
-from markov.highlights import Highlight
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.family import Family
+from darwin.highlights import Highlight
+from darwin.resolver import Event, EventType
 
-logger = logging.getLogger("markov.server")
+logger = logging.getLogger("darwin.server")
 
 
 class GameBroadcaster:

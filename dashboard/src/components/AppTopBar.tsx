@@ -113,7 +113,7 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
       <div className="grid grid-cols-3 gap-3 items-start">
         <div className="min-w-0 flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <div className="text-base tracking-tight font-medium">MARKOV</div>
+            <div className="text-base tracking-tight font-medium">DARWIN</div>
             <Badge className={`text-[10px] px-2 py-0.5 border ${STATUS_CLASS[status]}`}>
               {STATUS_LABEL[status]}
             </Badge>

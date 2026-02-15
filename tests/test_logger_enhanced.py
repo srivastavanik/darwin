@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.highlights import Highlight
-from markov.logger import GameLogger
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.highlights import Highlight
+from darwin.logger import GameLogger
+from darwin.resolver import Event, EventType
 
 
 def _agent(name: str, family: str = "House Clair") -> Agent:

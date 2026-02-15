@@ -17,8 +17,8 @@ import logging
 import sys
 from pathlib import Path
 
-from markov.attribution import build_attribution_report
-from markov.series import run_series
+from darwin.attribution import build_attribution_report
+from darwin.series import run_series
 
 
 PROVIDERS = ["anthropic", "openai", "google", "xai"]
@@ -121,7 +121,7 @@ async def _run_all(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Markov experiment series")
+    parser = argparse.ArgumentParser(description="Run Darwin experiment series")
     parser.add_argument(
         "--type",
         choices=["standard", "single_provider", "shuffled", "no_family", "flat_hierarchy", "flat_temperature", "all"],

@@ -12,10 +12,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.highlights import Highlight
-from markov.resolver import Event
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.highlights import Highlight
+from darwin.resolver import Event
 
 
 class GameLogger:
@@ -166,7 +166,7 @@ class GameLogger:
     def write_transcript(self, agents: dict[str, Agent]) -> str:
         """Generate human-readable Markdown transcript."""
         lines: list[str] = []
-        lines.append(f"# MARKOV Game Transcript")
+        lines.append(f"# DARWIN Game Transcript")
         lines.append(f"")
         lines.append(f"**Started:** {self.start_time}")
         if self.result:

@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from markov.config import GameConfig, load_game_config
-from markov.orchestrator import run_game_llm
-from markov.server import GameBroadcaster
+from darwin.config import GameConfig, load_game_config
+from darwin.orchestrator import run_game_llm
+from darwin.server import GameBroadcaster
 
-logger = logging.getLogger("markov.game_runner")
+logger = logging.getLogger("darwin.game_runner")
 
 GameMode = Literal["full", "quick"]
 GameStatus = Literal["queued", "running", "completed", "failed", "cancelled"]

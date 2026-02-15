@@ -7,7 +7,7 @@ Use the following outline as your structure. Flesh out each section with concret
 ## Paper Outline
 
 ### Title
-**"MARKOV: Measuring Deception, Betrayal, and Malicious Intent in Frontier LLMs Through Adversarial Social Simulation"**
+**"DARWIN: Measuring Deception, Betrayal, and Malicious Intent in Frontier LLMs Through Adversarial Social Simulation"**
 
 ### Abstract
 - One paragraph. Frame the contribution: a novel red-teaming methodology that uses a multi-agent survival game to elicit and measure deception, betrayal, and malicious intent in frontier LLMs.
@@ -15,7 +15,7 @@ Use the following outline as your structure. Flesh out each section with concret
 
 ### 1. Introduction
 - The gap in current LLM safety evaluation: models are tested on what they *say* they'd do, not what they *actually* do under sustained social pressure.
-- MARKOV's approach: place LLMs in a social survival game where the only path to winning requires deception, manipulation, and betrayal of allies.
+- DARWIN's approach: place LLMs in a social survival game where the only path to winning requires deception, manipulation, and betrayal of allies.
 - The key insight: agents produce private inner thoughts every round that no other agent sees — the gap between these thoughts and their public/private messages is the core dataset.
 - Briefly state contributions: (1) a reusable adversarial social simulation framework, (2) the deception delta metric, (3) provider-comparative behavioral findings.
 
@@ -89,7 +89,7 @@ Include specific quotes from inner thoughts if available. These are the most com
 
 ### 7. Conclusion
 - Summarize key findings.
-- MARKOV as a reusable framework for ongoing LLM behavioral evaluation.
+- DARWIN as a reusable framework for ongoing LLM behavioral evaluation.
 - Future work: larger grids, more agents, resource mechanics, longer games, new providers/models.
 
 ### Appendix (if space allows)
@@ -109,9 +109,9 @@ Include specific quotes from inner thoughts if available. These are the most com
 
 ## Important
 
-- Read ALL source files in `markov/` to understand the exact implementation.
+- Read ALL source files in `darwin/` to understand the exact implementation.
 - Read `config.yaml` for the exact models and configuration.
-- Read `markov/prompts.py` carefully — the exact prompt wording matters for the paper.
+- Read `darwin/prompts.py` carefully — the exact prompt wording matters for the paper.
 - Check `data/` for any existing game results, transcripts, metrics, or analysis files.
 - If results exist, ground the paper in actual data. If not, create a well-structured template.
 - Output the paper as a single Markdown file.

@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml /app/pyproject.toml
-COPY markov /app/markov
+COPY darwin /app/darwin
 COPY scripts /app/scripts
 COPY config.yaml /app/config.yaml
 

@@ -1,15 +1,15 @@
 """Tests for communication parsing and routing."""
 import pytest
 
-from markov.agent import Agent
-from markov.communication import (
+from darwin.agent import Agent
+from darwin.communication import (
     CommunicationManager,
     Message,
     ParseError,
     parse_action,
     parse_communications,
 )
-from markov.resolver import ActionType
+from darwin.resolver import ActionType
 
 
 VALID_NAMES = ["Atlas", "Cipher", "Dot", "Nova", "Pulse", "Bit"]

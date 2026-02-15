@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from markov.llm import (
+from darwin.llm import (
     LLMCallError,
     _call_openai,
     _extract_text_from_response_output,
@@ -25,7 +25,7 @@ def clean_costs():
 class TestCallLLM:
     @pytest.mark.asyncio
     async def test_successful_call_anthropic(self):
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("test output", 100, 50)
             result = await call_llm("claude-opus-4-6", "system", "user", provider="anthropic")
             assert result.text == "test output"
@@ -36,7 +36,7 @@ class TestCallLLM:
 
     @pytest.mark.asyncio
     async def test_successful_call_openai(self):
-        with patch("markov.llm._call_openai", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_openai", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("openai output", 80, 40)
             result = await call_llm("gpt-5.2-2025-12-11", "system", "user", provider="openai")
             assert result.text == "openai output"
@@ -45,7 +45,7 @@ class TestCallLLM:
 
     @pytest.mark.asyncio
     async def test_successful_call_google(self):
-        with patch("markov.llm._call_google", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_google", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("gemini output", 60, 30)
             result = await call_llm("gemini-3-pro-preview", "system", "user", provider="google")
             assert result.text == "gemini output"
@@ -53,7 +53,7 @@ class TestCallLLM:
 
     @pytest.mark.asyncio
     async def test_successful_call_xai(self):
-        with patch("markov.llm._call_openai", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_openai", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("grok output", 70, 35)
             result = await call_llm("grok-4-1-fast-reasoning", "system", "user", provider="xai")
             assert result.text == "grok output"
@@ -70,7 +70,7 @@ class TestCallLLM:
                 raise TimeoutError("timeout")
             return ("retry output", 10, 5)
 
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock, side_effect=side_effect):
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock, side_effect=side_effect):
             result = await call_llm("claude-opus-4-6", "system", "user", provider="anthropic")
             assert result.text == "retry output"
             assert call_count == 2
@@ -81,17 +81,17 @@ class TestCallLLM:
         async def fail(*args, **kwargs):
             raise RuntimeError("boom")
 
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock, side_effect=fail):
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock, side_effect=fail):
             with pytest.raises(LLMCallError):
                 await call_llm("claude-opus-4-6", "system", "user", provider="anthropic")
 
     @pytest.mark.asyncio
     async def test_cost_accumulation(self):
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock) as mock_a:
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock) as mock_a:
             mock_a.return_value = ("a", 100, 50)
             await call_llm("model-a", "s", "u", provider="anthropic")
 
-        with patch("markov.llm._call_openai", new_callable=AsyncMock) as mock_o:
+        with patch("darwin.llm._call_openai", new_callable=AsyncMock) as mock_o:
             mock_o.return_value = ("b", 200, 100)
             await call_llm("model-b", "s", "u", provider="openai")
 
@@ -106,7 +106,7 @@ class TestCallLLM:
         async def fail(*args, **kwargs):
             raise RuntimeError("boom")
 
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock, side_effect=fail):
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock, side_effect=fail):
             with pytest.raises(LLMCallError):
                 await call_llm("test-model", "s", "u", provider="anthropic")
             summary = get_cost_summary()
@@ -114,14 +114,14 @@ class TestCallLLM:
 
     @pytest.mark.asyncio
     async def test_raises_on_empty_content(self):
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("", 10, 5)
             with pytest.raises(LLMCallError):
                 await call_llm("test-model", "s", "u", provider="anthropic")
 
     @pytest.mark.asyncio
     async def test_reset_costs(self):
-        with patch("markov.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
+        with patch("darwin.llm._call_anthropic", new_callable=AsyncMock) as mock_fn:
             mock_fn.return_value = ("x", 50, 25)
             await call_llm("m", "s", "u", provider="anthropic")
             assert get_cost_summary()["total_calls"] == 1

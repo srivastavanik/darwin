@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-from markov.agent import Agent
-from markov.grid import Grid
+from darwin.agent import Agent
+from darwin.grid import Grid
 
 
 # ---------------------------------------------------------------------------

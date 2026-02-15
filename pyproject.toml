@@ -1,5 +1,5 @@
 [project]
-name = "markov"
+name = "darwin"
 version = "0.1.0"
 description = "LLM social survival experiment engine"
 requires-python = ">=3.11"

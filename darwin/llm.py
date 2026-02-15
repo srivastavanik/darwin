@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
-logger = logging.getLogger("markov.llm")
+logger = logging.getLogger("darwin.llm")
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ async def _call_openai(
         request_kwargs["text"] = {
             "format": {
                 "type": "json_schema",
-                "name": "MarkovJSON",
+                "name": "DarwinJSON",
                 "schema": schema,
                 "strict": True,
             }
@@ -783,7 +783,7 @@ async def _call_openai_with_thinking(
     if enforce_json:
         schema = json_schema or {"type": "object", "properties": {}, "additionalProperties": False}
         request_kwargs["text"] = {
-            "format": {"type": "json_schema", "name": "MarkovJSON", "schema": schema, "strict": True}
+            "format": {"type": "json_schema", "name": "DarwinJSON", "schema": schema, "strict": True}
         }
 
     text_chunks: list[str] = []

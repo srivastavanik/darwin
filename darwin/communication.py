@@ -10,11 +10,11 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from markov.agent import Agent
-from markov.grid import DIRECTION_DELTAS
-from markov.resolver import Action, ActionType
+from darwin.agent import Agent
+from darwin.grid import DIRECTION_DELTAS
+from darwin.resolver import Action, ActionType
 
-logger = logging.getLogger("markov.communication")
+logger = logging.getLogger("darwin.communication")
 
 
 # ---------------------------------------------------------------------------

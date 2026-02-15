@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.family import Family
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.family import Family
+from darwin.resolver import Event, EventType
 
 _vader = SentimentIntensityAnalyzer()
 

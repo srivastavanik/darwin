@@ -15,8 +15,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MARKOV -- LLM Social Experiment Observer",
-  description: "Real-time observer interface for the Markov LLM survival experiment",
+  title: "DARWIN -- LLM Social Experiment Observer",
+  description: "Real-time observer interface for the Darwin LLM survival experiment",
 };
 
 export default function RootLayout({

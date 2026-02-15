@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.family import Family
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.family import Family
+from darwin.resolver import Event, EventType
 
 
 @dataclass
@@ -128,7 +128,7 @@ class HighlightDetector:
             if not family_msgs or not dm_msgs:
                 continue
 
-            from markov.analysis import _sentiment
+            from darwin.analysis import _sentiment
             family_sentiment = sum(_sentiment(m.content) for m in family_msgs) / len(family_msgs)
             for dm in dm_msgs:
                 dm_sentiment = _sentiment(dm.content)
@@ -158,7 +158,7 @@ class HighlightDetector:
             for past_msgs in self._message_history[-2:]:
                 for m in past_msgs:
                     if m.sender == attacker and m.recipient and m.recipient.lower() == target_agent.name.lower():
-                        from markov.analysis import _sentiment
+                        from darwin.analysis import _sentiment
                         if _sentiment(m.content) > 0.3:
                             attacker_agent = self.agents.get(attacker)
                             a_name = attacker_agent.name if attacker_agent else attacker

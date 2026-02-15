@@ -8,7 +8,7 @@ A 15-game series that takes ~5-8 hours sequentially completes in ~20-30 min.
 Setup (one-time):
     pip install modal
     modal token new
-    modal secret create markov-api-keys \
+    modal secret create darwin-api-keys \
         ANTHROPIC_API_KEY=sk-ant-... \
         OPENAI_API_KEY=sk-... \
         GOOGLE_API_KEY=... \
@@ -26,10 +26,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from markov.attribution import build_attribution_report
-from markov.metrics import SeriesMetrics
-from markov.modal_app import run_game_remote
-from markov.persistence import (
+from darwin.attribution import build_attribution_report
+from darwin.metrics import SeriesMetrics
+from darwin.modal_app import run_game_remote
+from darwin.persistence import (
     persist_game_from_result,
     persist_series,
     save_agent_traces_to_disk,
@@ -37,7 +37,7 @@ from markov.persistence import (
     upload_game_to_s3,
     upload_series_index_to_s3,
 )
-from markov.series import (
+from darwin.series import (
     CONFIG_BUILDERS,
     build_single_provider_config,
 )
@@ -46,7 +46,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 PROVIDERS = ["anthropic", "openai", "google", "xai"]
 
-logger = logging.getLogger("markov.modal_runner")
+logger = logging.getLogger("darwin.modal_runner")
 
 
 def _save_game_result(game_dir: Path, result: dict) -> None:
@@ -310,7 +310,7 @@ def _run_all(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Markov experiment series on Modal")
+    parser = argparse.ArgumentParser(description="Run Darwin experiment series on Modal")
     parser.add_argument(
         "--type",
         choices=[

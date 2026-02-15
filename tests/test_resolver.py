@@ -1,9 +1,9 @@
 """Tests for resolver: all specified edge cases for simultaneous resolution."""
 import pytest
 
-from markov.agent import Agent
-from markov.grid import Grid
-from markov.resolver import Action, ActionType, Event, EventType, resolve_actions
+from darwin.agent import Agent
+from darwin.grid import Grid
+from darwin.resolver import Action, ActionType, Event, EventType, resolve_actions
 
 
 # ---------------------------------------------------------------------------

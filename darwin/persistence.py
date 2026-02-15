@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
-logger = logging.getLogger("markov.persistence")
+logger = logging.getLogger("darwin.persistence")
 
 _SUPABASE_URL = f"https://{os.getenv('SUPABASE_PROJECT_REF', 'yyistnxvozjmqmawdent')}.supabase.co"
 _SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -53,8 +53,8 @@ def persist_game(
         return False
 
     try:
-        from markov.orchestrator import GameState
-        from markov.logger import GameLogger
+        from darwin.orchestrator import GameState
+        from darwin.logger import GameLogger
 
         st: GameState = state  # type: ignore
         gl: GameLogger = game_logger  # type: ignore

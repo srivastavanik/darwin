@@ -1,4 +1,4 @@
-# MARKOV Runbook
+# DARWIN Runbook
 
 ## Services
 - API service: `python -m scripts.run_api` (FastAPI + websocket host lifecycle)

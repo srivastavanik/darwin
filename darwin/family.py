@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from markov.agent import Agent
-from markov.config import FamilyConfig
+from darwin.agent import Agent
+from darwin.config import FamilyConfig
 
 
 @dataclass

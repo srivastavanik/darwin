@@ -1,4 +1,4 @@
-# MARKOV
+# DARWIN
 
 An experiment in LLM malicious intent. 12 LLM agents from 4 providers play a survival game on a 6x6 grid. They communicate, form alliances, deceive, and eliminate each other until one remains. The real dataset is their private inner thoughts vs. what they say publicly.
 
@@ -14,7 +14,7 @@ An experiment in LLM malicious intent. 12 LLM agents from 4 providers play a sur
 ## Architecture
 
 ```
-markov/
+darwin/
   config.py          # Pydantic config models, YAML loader
   grid.py            # 6x6 board, movement, adjacency
   agent.py           # Agent state tracking
@@ -45,8 +45,8 @@ scripts/
 
 ```bash
 # Clone
-git clone https://github.com/srivastavanik/markov.git
-cd markov
+git clone https://github.com/srivastavanik/darwin.git
+cd darwin
 
 # Python environment
 python3.11 -m venv venv
@@ -92,7 +92,7 @@ Open `http://localhost:3000`, launch runs from the in-app control bar, and watch
 
 ### Strict LLM policy (no synthetic fallbacks)
 
-- MARKOV now runs in **LLM-only fail-fast** mode.
+- DARWIN now runs in **LLM-only fail-fast** mode.
 - If any model call fails, returns empty content, or returns unparsable action/communication JSON, the run is marked `failed`.
 - The API surfaces this via `error` on `/api/games` and `/api/games/{game_id}`.
 - The dashboard run controls show the failure reason in active/recent runs.

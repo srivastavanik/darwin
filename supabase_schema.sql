@@ -1,4 +1,4 @@
--- MARKOV Supabase Schema
+-- DARWIN Supabase Schema
 -- Run this in the Supabase SQL Editor to create all required tables.
 
 -- ==========================================================================

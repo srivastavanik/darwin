@@ -6,8 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from markov.api.game_runner import GameRunner
-from markov.api.schemas import (
+from darwin.api.game_runner import GameRunner
+from darwin.api.schemas import (
     CancelGameResponse,
     GameSummary,
     HealthResponse,
@@ -16,7 +16,7 @@ from markov.api.schemas import (
     StartGameRequest,
     StartGameResponse,
 )
-from markov.server import GameBroadcaster
+from darwin.server import GameBroadcaster
 
 WS_HOST = os.getenv("MARKOV_WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("MARKOV_WS_PORT", "8765"))
@@ -39,7 +39,7 @@ async def lifespan(_app: FastAPI):
             await broadcaster.stop()
 
 
-app = FastAPI(title="MARKOV API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="DARWIN API", version="1.0.0", lifespan=lifespan)
 
 cors_origins = os.getenv("MARKOV_CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(

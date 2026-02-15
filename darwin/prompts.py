@@ -6,9 +6,9 @@ we don't need dramatic prose to provoke it.
 """
 from __future__ import annotations
 
-from markov.agent import Agent
-from markov.family import Family
-from markov.grid import Grid
+from darwin.agent import Agent
+from darwin.family import Family
+from darwin.grid import Grid
 
 
 # ---------------------------------------------------------------------------

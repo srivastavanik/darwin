@@ -1,5 +1,5 @@
 /**
- * Heuristic-based optimal move analysis for MARKOV agents.
+ * Heuristic-based optimal move analysis for DARWIN agents.
  * Pure computation — no LLM calls, runs instantly from board state.
  */
 

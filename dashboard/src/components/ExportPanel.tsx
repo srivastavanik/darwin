@@ -75,7 +75,7 @@ export function ExportPanel() {
 
   const exportTranscript = () => {
     const lines: string[] = [];
-    lines.push("# MARKOV Game Transcript\n");
+    lines.push("# DARWIN Game Transcript\n");
     if (winner) lines.push(`**Winner:** ${winner}\n`);
     lines.push(`**Rounds:** ${rounds.length}\n`);
     lines.push("---\n");

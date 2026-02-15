@@ -1,10 +1,10 @@
 """Tests for Grid: placement, adjacency, bounds, rendering."""
 import pytest
 
-from markov.agent import Agent
-from markov.config import load_game_config
-from markov.family import Family
-from markov.grid import CORNER_SPAWNS, Grid
+from darwin.agent import Agent
+from darwin.config import load_game_config
+from darwin.family import Family
+from darwin.grid import CORNER_SPAWNS, Grid
 
 
 # ---------------------------------------------------------------------------

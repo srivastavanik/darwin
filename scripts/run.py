@@ -9,12 +9,12 @@ import argparse
 import random
 import sys
 
-from markov.config import load_game_config
-from markov.orchestrator import random_action_provider, run_game
+from darwin.config import load_game_config
+from darwin.orchestrator import random_action_provider, run_game
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a Markov game with random actions")
+    parser = argparse.ArgumentParser(description="Run a Darwin game with random actions")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-round output")
     args = parser.parse_args()

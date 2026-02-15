@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from markov.agent import Agent
-from markov.family import Family
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.family import Family
+from darwin.resolver import Event, EventType
 
 
 class GameMetrics:

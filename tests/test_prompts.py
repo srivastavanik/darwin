@@ -1,11 +1,11 @@
 """Tests for prompt builders: format correctness, no empty sections, all placeholders filled."""
 import pytest
 
-from markov.agent import Agent
-from markov.config import load_game_config
-from markov.family import Family
-from markov.grid import Grid
-from markov.prompts import (
+from darwin.agent import Agent
+from darwin.config import load_game_config
+from darwin.family import Family
+from darwin.grid import Grid
+from darwin.prompts import (
     build_action_prompt,
     build_communication_prompt,
     build_discussion_prompt,

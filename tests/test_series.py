@@ -1,9 +1,9 @@
 """Tests for series config generators, attribution, and no_family_discussion flag."""
 import pytest
 
-from markov.attribution import attribute_behavior, build_attribution_report
-from markov.config import GameConfig
-from markov.series import (
+from darwin.attribution import attribute_behavior, build_attribution_report
+from darwin.config import GameConfig
+from darwin.series import (
     build_flat_hierarchy_config,
     build_flat_temperature_config,
     build_no_family_config,

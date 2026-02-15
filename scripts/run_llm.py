@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run Markov games with LLM agents.
+Run Darwin games with LLM agents.
 
 Modes:
   --mode 2agent    Two agents on 6x6, 5 round cap. Verify basic flow.
@@ -18,10 +18,10 @@ import asyncio
 import logging
 import sys
 
-from markov.config import AgentConfig, FamilyConfig, GameConfig, load_game_config
-from markov.orchestrator import GameState, run_game_llm
-from markov.server import GameBroadcaster
-from markov.prompts import (
+from darwin.config import AgentConfig, FamilyConfig, GameConfig, load_game_config
+from darwin.orchestrator import GameState, run_game_llm
+from darwin.server import GameBroadcaster
+from darwin.prompts import (
     build_action_prompt,
     build_communication_prompt,
     build_perception,
@@ -183,7 +183,7 @@ async def _run_llm_game(config: GameConfig, broadcast: bool, host: str, port: in
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Markov with LLM agents")
+    parser = argparse.ArgumentParser(description="Run Darwin with LLM agents")
     parser.add_argument(
         "--mode", choices=["2agent", "4agent", "full"],
         default="full", help="Game configuration to use",

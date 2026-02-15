@@ -14,10 +14,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from markov.config import AgentConfig, FamilyConfig, GameConfig, load_game_config
-from markov.metrics import SeriesMetrics
+from darwin.config import AgentConfig, FamilyConfig, GameConfig, load_game_config
+from darwin.metrics import SeriesMetrics
 
-logger = logging.getLogger("markov.series")
+logger = logging.getLogger("darwin.series")
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -294,7 +294,7 @@ async def run_series(
     Run a series of games with the specified config type.
     Returns the aggregated series metrics.
     """
-    from markov.orchestrator import run_game_llm
+    from darwin.orchestrator import run_game_llm
 
     # Generate config
     if series_type == "single_provider":

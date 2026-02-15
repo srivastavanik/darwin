@@ -67,7 +67,7 @@ export function RoundControls({ status = "disconnected" }: { status?: WebSocketS
     <div className="flex items-center justify-between px-5 py-3 border-b border-black/10 bg-card">
       <div className="flex items-center gap-3 min-w-0">
         <h1 className="text-base font-medium tracking-tight text-black">
-          MARKOV
+          DARWIN
         </h1>
         <div className="flex items-center gap-2">
           <Link href="/" className="text-xs text-black/80 underline-offset-2 hover:text-black hover:underline">

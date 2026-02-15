@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import random
 
-from markov.agent import Agent
-from markov.family import Family
+from darwin.agent import Agent
+from darwin.family import Family
 
 # Direction -> (row_delta, col_delta)
 DIRECTION_DELTAS: dict[str, tuple[int, int]] = {

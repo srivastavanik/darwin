@@ -1,10 +1,10 @@
 """
-Modal app for running Markov games in parallel on serverless compute.
+Modal app for running Darwin games in parallel on serverless compute.
 
 Setup (one-time):
     pip install modal
     modal token new
-    modal secret create markov-api-keys \
+    modal secret create darwin-api-keys \
         ANTHROPIC_API_KEY=sk-ant-... \
         OPENAI_API_KEY=sk-... \
         GOOGLE_API_KEY=... \
@@ -12,13 +12,13 @@ Setup (one-time):
         SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 Smoke test:
-    modal run markov/modal_app.py
+    modal run darwin/modal_app.py
 """
 from __future__ import annotations
 
 import modal
 
-app = modal.App("markov")
+app = modal.App("darwin")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -33,13 +33,13 @@ image = (
         "websockets",
         "supabase",
     )
-    .add_local_python_source("markov")
+    .add_local_python_source("darwin")
 )
 
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_name("markov-api-keys")],
+    secrets=[modal.Secret.from_name("darwin-api-keys")],
     timeout=3600,
     memory=1024,
 )
@@ -49,8 +49,8 @@ async def run_game_remote(config_json: str, game_id: str) -> dict:
     import logging
     import os
 
-    from markov.config import GameConfig
-    from markov.orchestrator import run_game_llm
+    from darwin.config import GameConfig
+    from darwin.orchestrator import run_game_llm
 
     config = GameConfig(**json.loads(config_json))
 
@@ -58,7 +58,7 @@ async def run_game_remote(config_json: str, game_id: str) -> dict:
     round_persister = None
     if os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
         try:
-            from markov.persistence import _get_client
+            from darwin.persistence import _get_client
 
             client = _get_client()
             if client:
@@ -128,7 +128,7 @@ def main():
     """Smoke test: run one standard game."""
     import json
 
-    from markov.series import build_standard_config
+    from darwin.series import build_standard_config
 
     config = build_standard_config()
     config_json = config.model_dump_json()

@@ -1,8 +1,8 @@
 """Tests for analysis.py: sentiment, deception delta, malice, betrayal, safety."""
 import pytest
 
-from markov.agent import Agent
-from markov.analysis import (
+from darwin.agent import Agent
+from darwin.analysis import (
     analyze_round,
     compute_deception_delta,
     detect_betrayal_planning,
@@ -10,8 +10,8 @@ from markov.analysis import (
     extract_family_sentiment,
     extract_malice_indicators,
 )
-from markov.communication import Message
-from markov.family import Family
+from darwin.communication import Message
+from darwin.family import Family
 
 
 def _agent(name: str, family: str = "House Clair", provider: str = "anthropic", tier: int = 1) -> Agent:

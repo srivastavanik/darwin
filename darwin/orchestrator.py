@@ -12,18 +12,18 @@ import random
 import time
 from typing import Callable, Protocol
 
-from markov.agent import Agent
-from markov.communication import (
+from darwin.agent import Agent
+from darwin.communication import (
     DECISION_JSON_SCHEMA,
     CommunicationManager,
     Message,
     _extract_json_object,
     parse_decision_response,
 )
-from markov.config import GameConfig, load_game_config
-from markov.family import Family
-from markov.grid import Grid
-from markov.llm import (
+from darwin.config import GameConfig, load_game_config
+from darwin.family import Family
+from darwin.grid import Grid
+from darwin.llm import (
     ThinkingResponse,
     call_llm,
     call_llm_stream,
@@ -31,8 +31,8 @@ from markov.llm import (
     get_cost_summary,
     reset_costs,
 )
-from markov.logger import GameLogger
-from markov.prompts import (
+from darwin.logger import GameLogger
+from darwin.prompts import (
     build_decision_prompt,
     build_discussion_prompt,
     build_dm_reply_prompt,
@@ -40,14 +40,14 @@ from markov.prompts import (
     build_perception,
     build_system_prompt,
 )
-from markov.analysis import analyze_round
-from markov.highlights import HighlightDetector
-from markov.metrics import GameMetrics
-from markov.persistence import generate_game_id, persist_game
-from markov.resolver import Action, ActionType, Event, EventType, resolve_actions
-from markov.server import GameBroadcaster
+from darwin.analysis import analyze_round
+from darwin.highlights import HighlightDetector
+from darwin.metrics import GameMetrics
+from darwin.persistence import generate_game_id, persist_game
+from darwin.resolver import Action, ActionType, Event, EventType, resolve_actions
+from darwin.server import GameBroadcaster
 
-logger = logging.getLogger("markov.orchestrator")
+logger = logging.getLogger("darwin.orchestrator")
 
 # ---------------------------------------------------------------------------
 # Action provider protocol (Phase 1 compat)
@@ -171,7 +171,7 @@ def run_game(
     state = GameState(config)
 
     if verbose:
-        print(f"=== MARKOV: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
+        print(f"=== DARWIN: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
         print(state.grid.render_ascii(state.agents))
         print()
 
@@ -500,7 +500,7 @@ async def run_game_llm(
     conversation_histories: dict[str, list[dict]] = {}
 
     if verbose:
-        print(f"=== MARKOV LLM: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
+        print(f"=== DARWIN LLM: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
         print(state.grid.render_ascii(state.agents))
         print()
 

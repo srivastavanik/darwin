@@ -1,10 +1,10 @@
 """Tests for metrics.py: GameMetrics update/finalize, aggregation."""
 import pytest
 
-from markov.agent import Agent
-from markov.family import Family
-from markov.metrics import GameMetrics, SeriesMetrics, _avg
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.family import Family
+from darwin.metrics import GameMetrics, SeriesMetrics, _avg
+from darwin.resolver import Event, EventType
 
 
 def _agent(name: str, family: str = "House Clair", provider: str = "anthropic", tier: int = 1) -> Agent:

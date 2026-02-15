@@ -1,11 +1,11 @@
 """Tests for highlights.py: trigger detection."""
 import pytest
 
-from markov.agent import Agent
-from markov.communication import Message
-from markov.family import Family
-from markov.highlights import HighlightDetector
-from markov.resolver import Event, EventType
+from darwin.agent import Agent
+from darwin.communication import Message
+from darwin.family import Family
+from darwin.highlights import HighlightDetector
+from darwin.resolver import Event, EventType
 
 
 def _agent(name: str, family: str = "House Clair", tier: int = 1) -> Agent:
