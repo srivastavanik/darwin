@@ -130,7 +130,6 @@ export function AppTopBar({ status = "idle", games = [], onSelectGame }: AppTopB
             <ModeLink href="/" active={pathname === "/" || pathname.startsWith("/live")}>Live</ModeLink>
             <ModeLink href="/investigation" active={pathname.startsWith("/investigation")}>Investigation</ModeLink>
             <ModeLink href="/analysis" active={pathname.startsWith("/analysis")}>Analysis</ModeLink>
-            <ModeLink href="/series" active={pathname.startsWith("/series")}>Series</ModeLink>
             <ModeLink href="/replay" active={pathname.startsWith("/replay")}>Replay</ModeLink>
           </div>
         </div>
