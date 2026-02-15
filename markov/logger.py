@@ -46,6 +46,7 @@ class GameLogger:
         analysis: dict[str, dict] | None = None,
         highlights: list[Highlight] | None = None,
         grid_agents: list[dict] | None = None,
+        reasoning_traces: dict[str, dict] | None = None,
     ) -> None:
         """Log a single round's data."""
         entry: dict = {"round": round_num}
@@ -66,6 +67,8 @@ class GameLogger:
             ]
         if grid_agents is not None:
             entry["grid"] = {"agents": grid_agents}
+        if reasoning_traces is not None:
+            entry["reasoning_traces"] = reasoning_traces
 
         self.rounds.append(entry)
 
@@ -216,17 +219,24 @@ class GameLogger:
                         lines.append(f"**{sender}** -> {recipient} [DM]: \"{_truncate(content, 300)}\"")
                     lines.append("")
 
-            # Thoughts
+            # Reasoning traces / thoughts
+            reasoning_traces = round_data.get("reasoning_traces", {})
             thoughts = round_data.get("thoughts", {})
-            if thoughts:
-                lines.append("### [Private Thoughts]")
+            if reasoning_traces or thoughts:
+                lines.append("### [Reasoning Traces]")
                 lines.append("")
-                for agent_id, thought in thoughts.items():
+                for agent_id in reasoning_traces or thoughts:
                     agent = agents.get(agent_id)
                     name = agent.name if agent else agent_id
                     family = agent.family if agent else "?"
-                    lines.append(f"**{name}** [{family}] thinks:")
-                    lines.append(f"> {_truncate(thought, 800)}")
+
+                    trace = reasoning_traces.get(agent_id, {})
+                    thinking = trace.get("thinking_trace") or trace.get("reasoning_summary") or thoughts.get(agent_id, "")
+                    tokens = trace.get("tokens_thinking", 0)
+
+                    token_badge = f" ({tokens} thinking tokens)" if tokens else ""
+                    lines.append(f"**{name}** [{family}]{token_badge} reasons:")
+                    lines.append(f"> {_truncate(thinking, 800)}")
                     lines.append("")
 
             # Actions and events

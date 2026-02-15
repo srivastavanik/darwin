@@ -225,6 +225,7 @@ class GameBroadcaster:
         game_over: bool,
         winner: Agent | None,
         game_id: str | None = None,
+        reasoning_traces: dict[str, dict] | None = None,
     ) -> None:
         # Categorize messages
         broadcasts = [m.to_dict() for m in messages if m.channel == "broadcast"]
@@ -281,6 +282,7 @@ class GameBroadcaster:
             "alive_count": sum(1 for a in agents.values() if a.alive),
             "game_over": game_over,
             "winner": winner.name if winner else None,
+            "reasoning_traces": reasoning_traces or {},
         }, game_id=game_id)
 
     async def broadcast_game_over(
