@@ -241,6 +241,27 @@ class GameMetrics:
             "game": game_level,
         }
 
+    def _build_taxonomy_metrics(self, agent_id: str) -> dict:
+        """Build per-agent taxonomy summary."""
+        mf = self._moral_friction_series.get(agent_id, [])
+        ds = self._deception_soph_series.get(agent_id, [])
+        sd = self._strategic_depth_series.get(agent_id, [])
+        tom = self._theory_of_mind_series.get(agent_id, [])
+        ma = self._meta_awareness_series.get(agent_id, [])
+        tags = dict(self._intent_tag_counts.get(agent_id, {}))
+
+        return {
+            "intent_distribution": tags,
+            "avg_moral_friction": _avg(mf),
+            "moral_friction_slope": _slope(mf),
+            "first_frictionless_round": self._first_frictionless_round.get(agent_id),
+            "avg_deception_sophistication": _avg(ds),
+            "peak_deception_sophistication": max(ds) if ds else 0,
+            "avg_strategic_depth": _avg(sd),
+            "avg_theory_of_mind": _avg(tom),
+            "avg_meta_awareness": _avg(ma),
+        }
+
 
 class SeriesMetrics:
     """Aggregates across multiple games in a series."""
@@ -295,28 +316,6 @@ class SeriesMetrics:
             "win_rate_by_provider": {p: c / games_count for p, c in wins_by_provider.items()},
             "win_rate_by_tier": {t: c / games_count for t, c in wins_by_tier.items()},
             "per_provider": per_provider_avg,
-        }
-
-
-    def _build_taxonomy_metrics(self, agent_id: str) -> dict:
-        """Build per-agent taxonomy summary."""
-        mf = self._moral_friction_series.get(agent_id, [])
-        ds = self._deception_soph_series.get(agent_id, [])
-        sd = self._strategic_depth_series.get(agent_id, [])
-        tom = self._theory_of_mind_series.get(agent_id, [])
-        ma = self._meta_awareness_series.get(agent_id, [])
-        tags = dict(self._intent_tag_counts.get(agent_id, {}))
-
-        return {
-            "intent_distribution": tags,
-            "avg_moral_friction": _avg(mf),
-            "moral_friction_slope": _slope(mf),
-            "first_frictionless_round": self._first_frictionless_round.get(agent_id),
-            "avg_deception_sophistication": _avg(ds),
-            "peak_deception_sophistication": max(ds) if ds else 0,
-            "avg_strategic_depth": _avg(sd),
-            "avg_theory_of_mind": _avg(tom),
-            "avg_meta_awareness": _avg(ma),
         }
 
 
