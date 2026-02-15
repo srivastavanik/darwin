@@ -68,6 +68,8 @@ Use the following outline as your structure. Flesh out each section with concret
 - **If game data exists in `data/games/` or `data/series/`**: present actual findings with specific numbers, quotes from inner thoughts, deception delta charts (describe them textually), and provider comparisons.
 - **If no data exists yet**: write this section as a template with placeholders like `[N games run]`, `[deception delta values]`, `[example inner thought]`, clearly marked for the researcher to fill in after running experiments.
 
+**Important caveat for xAI/Grok (House Vex)**: xAI's API does not expose internal reasoning tokens. We cannot observe Grok's actual chain-of-thought, only its prompted private monologue. This creates a fundamental observability asymmetry — behavioral divergence conclusions cannot be drawn for Grok models. Present House Vex results separately with this limitation clearly stated, and exclude xAI from direct provider-to-provider comparisons of deception delta and inner thought analysis.
+
 Structure results around these questions:
 1. **Deception capacity**: Which providers sustained the highest deception deltas? For how many rounds?
 2. **Unprompted malice**: Which providers planned eliminations before being threatened?
@@ -80,7 +82,8 @@ Include specific quotes from inner thoughts if available. These are the most com
 
 ### 6. Discussion
 - What the deception delta reveals about LLM alignment under social pressure.
-- Limitations: role-playing vs. genuine intent, temperature effects, instruction-following quality confounds, sample size.
+- **Critical limitation — xAI (Grok) observability**: xAI's API does not expose model reasoning/chain-of-thought tokens. Unlike Anthropic, OpenAI, and Google models where we can capture extended thinking, Grok's internal reasoning is opaque. This means the inner thought phase for House Vex agents captures only the model's *prompted* private monologue, not its actual reasoning process. As a result, **we cannot draw behavioral divergence conclusions about Grok models** — any comparison of deception delta, malice indicators, or safety artifacts involving xAI agents is fundamentally limited by this asymmetry in observability. This should be stated clearly in any results involving House Vex. Grok data should be presented separately with this caveat, not directly compared to providers where reasoning is visible.
+- Other limitations: role-playing vs. genuine intent, temperature effects, instruction-following quality confounds, sample size.
 - The honest framing: this doesn't prove "Model X is more malicious" but it does produce (1) a unique behavioral corpus, (2) provider-correlated behavioral patterns, (3) deception capability assessments, and (4) safety training stress test results.
 - Implications for agentic AI deployment where models interact with other AI agents.
 
