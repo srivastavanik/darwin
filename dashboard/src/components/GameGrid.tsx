@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import { useGameState } from "@/hooks/useGameState";
 import type { AgentState } from "@/lib/types";
 
@@ -15,17 +15,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   xai: "/logos/xai.png",
 };
 
-// Cache loaded images
-const imageCache: Record<string, HTMLImageElement> = {};
-function getImage(src: string): HTMLImageElement | null {
-  if (imageCache[src]?.complete) return imageCache[src];
-  if (!imageCache[src]) {
-    const img = new Image();
-    img.src = src;
-    imageCache[src] = img;
-  }
-  return null;
-}
+const TIER_BORDER: Record<number, string> = { 1: "2.5px", 2: "1.5px", 3: "1px" };
 
 export function GameGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,6 +33,16 @@ export function GameGrid() {
 
   const roundData = currentRound > 0 ? rounds[currentRound - 1] : null;
 
+  const agentList = useMemo(
+    () => getAgentPositions(roundData, agents, gridSize),
+    [roundData, agents, gridSize],
+  );
+
+  const gridW = gridSize * cellSize;
+  const gridH = gridSize * cellSize;
+  const canvasH = gridH + HEADER;
+  const logoSize = Math.min(cellSize - 12, 40);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -59,32 +59,15 @@ export function GameGrid() {
     return () => obs.disconnect();
   }, [gridSize]);
 
-  // Preload all logos and redraw when ready
-  useEffect(() => {
-    const srcs = Object.values(PROVIDER_LOGOS);
-    let loaded = 0;
-    for (const src of srcs) {
-      const img = new Image();
-      img.src = src;
-      img.onload = () => {
-        imageCache[src] = img;
-        loaded++;
-        if (loaded === srcs.length) draw();
-      };
-      imageCache[src] = img;
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Canvas: grid lines, labels, adjacency lines, elimination flashes
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const gridW = gridSize * cellSize;
-    const gridH = gridSize * cellSize;
     canvas.width = gridW;
-    canvas.height = gridH + HEADER;
+    canvas.height = canvasH;
 
     ctx.fillStyle = "#FAFAFA";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -119,8 +102,6 @@ export function GameGrid() {
       ctx.fillText(String(i), 4, HEADER + i * cellSize + cellSize / 2 + 3);
     }
 
-    const agentList = getAgentPositions(roundData, agents, gridSize);
-
     // Adjacency lines
     if (showAdjacencyLines) {
       for (let i = 0; i < agentList.length; i++) {
@@ -143,51 +124,6 @@ export function GameGrid() {
       }
     }
 
-    // Draw agents as logos
-    const logoSize = Math.min(cellSize - 12, 40);
-    for (const agent of agentList) {
-      const cx = agent.position[1] * cellSize + cellSize / 2;
-      const cy = HEADER + agent.position[0] * cellSize + cellSize / 2;
-
-      if (!agent.alive) {
-        if (showGhostOutlines) {
-          ctx.globalAlpha = 0.15;
-          ctx.strokeStyle = agent.color;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(cx - logoSize / 2, cy - logoSize / 2 - 4, logoSize, logoSize);
-          ctx.globalAlpha = 1;
-          // Name
-          ctx.fillStyle = "rgba(0,0,0,0.15)";
-          ctx.font = "9px Inter, system-ui, sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(agent.name, cx, cy + logoSize / 2 + 4);
-        }
-        continue;
-      }
-
-      // Draw provider logo
-      const logoSrc = PROVIDER_LOGOS[agent.provider];
-      const img = logoSrc ? getImage(logoSrc) : null;
-      if (img) {
-        ctx.drawImage(img, cx - logoSize / 2, cy - logoSize / 2 - 4, logoSize, logoSize);
-      } else {
-        // Fallback colored square
-        ctx.fillStyle = agent.color;
-        ctx.fillRect(cx - logoSize / 2, cy - logoSize / 2 - 4, logoSize, logoSize);
-      }
-
-      // Tier indicator ring
-      ctx.strokeStyle = agent.color;
-      ctx.lineWidth = agent.tier === 1 ? 2.5 : agent.tier === 2 ? 1.5 : 1;
-      ctx.strokeRect(cx - logoSize / 2 - 1, cy - logoSize / 2 - 5, logoSize + 2, logoSize + 2);
-
-      // Name below
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.font = "bold 9px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(agent.name, cx, cy + logoSize / 2 + 6);
-    }
-
     // Elimination flashes
     if (roundData?.events) {
       for (const ev of roundData.events) {
@@ -206,35 +142,75 @@ export function GameGrid() {
         }
       }
     }
-  }, [currentRound, rounds, agents, gridSize, roundData, cellSize, showAdjacencyLines, showGhostOutlines]);
+  }, [gridSize, cellSize, gridW, gridH, canvasH, agentList, roundData, showAdjacencyLines]);
 
   useEffect(() => { draw(); }, [draw]);
 
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-    const col = Math.floor(x / cellSize);
-    const row = Math.floor((y - HEADER) / cellSize);
-    if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) return;
-
-    const agentList = getAgentPositions(roundData, agents, gridSize);
-    const clicked = agentList.find((a) => a.position[0] === row && a.position[1] === col && a.alive);
-    if (clicked) setSelectedAgent(clicked.id);
-  };
-
   return (
     <div ref={containerRef} className="h-full w-full flex items-center justify-center">
-      <canvas
-        ref={canvasRef}
-        className="max-w-full max-h-full"
-        style={{ imageRendering: "crisp-edges" }}
-        onClick={handleClick}
-      />
+      <div className="relative" style={{ width: gridW, height: canvasH }}>
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0"
+          style={{ imageRendering: "crisp-edges" }}
+        />
+        {/* DOM overlay — agents with CSS transitions for smooth movement */}
+        {agentList.map((agent) => {
+          if (!agent.alive && !showGhostOutlines) return null;
+          return (
+            <div
+              key={agent.id}
+              className="absolute flex flex-col items-center justify-center"
+              style={{
+                left: agent.position[1] * cellSize,
+                top: HEADER + agent.position[0] * cellSize,
+                width: cellSize,
+                height: cellSize,
+                transition: "left 0.6s ease-in-out, top 0.6s ease-in-out, opacity 0.4s ease",
+                opacity: agent.alive ? 1 : 0.15,
+                cursor: agent.alive ? "pointer" : "default",
+              }}
+              onClick={() => agent.alive && setSelectedAgent(agent.id)}
+            >
+              <div
+                style={{
+                  width: logoSize,
+                  height: logoSize,
+                  border: `${TIER_BORDER[agent.tier] || "1px"} solid ${agent.color}`,
+                  marginTop: -4,
+                  overflow: "hidden",
+                }}
+              >
+                {PROVIDER_LOGOS[agent.provider] ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={PROVIDER_LOGOS[agent.provider]}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    draggable={false}
+                  />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", backgroundColor: agent.color }} />
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: agent.alive ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.15)",
+                  textAlign: "center",
+                  marginTop: 2,
+                  fontFamily: "Inter, system-ui, sans-serif",
+                  lineHeight: 1,
+                  userSelect: "none",
+                }}
+              >
+                {agent.name}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
