@@ -7,8 +7,6 @@ services:
     envVars:
       - key: MARKOV_SINGLE_PORT
         value: "1"
-      - key: MARKOV_API_PORT
-        fromEnvVar: PORT
       - key: MARKOV_CORS_ORIGINS
         value: "https://darwin-dashboard.vercel.app,http://localhost:3000"
       - key: MARKOV_WS_PUBLIC_URL

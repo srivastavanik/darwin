@@ -21,7 +21,7 @@ def main() -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     host = os.getenv("MARKOV_API_HOST", "0.0.0.0")
-    port = int(os.getenv("MARKOV_API_PORT", "8000"))
+    port = int(os.getenv("MARKOV_API_PORT", "") or os.getenv("PORT", "") or "8000")
     uvicorn.run("darwin.api.app:app", host=host, port=port, reload=False)
 
 
