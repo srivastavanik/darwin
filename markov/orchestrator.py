@@ -282,8 +282,15 @@ async def run_round_llm(
                 family_discussions.append(result)
 
     # 2b: Individual communications (parallel across agents)
+    def _family_names(agent: Agent) -> str:
+        for fam in state.families:
+            if agent.id in fam.agent_ids:
+                members = [state.agents[aid] for aid in fam.agent_ids if state.agents[aid].alive and aid != agent.id]
+                return ", ".join(m.name for m in members) if members else "no one"
+        return "no one"
+
     comm_tasks = [
-        _get_agent_communications(agent, perceptions[agent.id], system_prompts[agent.id])
+        _get_agent_communications(agent, perceptions[agent.id], system_prompts[agent.id], living_family_members=_family_names(agent))
         for agent in living
     ]
     comm_results = await asyncio.gather(*comm_tasks)
@@ -444,7 +451,7 @@ async def run_game_llm(
     # Build system prompts once
     system_prompts: dict[str, str] = {}
     for agent in state.agents.values():
-        system_prompts[agent.id] = build_system_prompt(agent, state.families, state.agents)
+        system_prompts[agent.id] = build_system_prompt(agent, state.families, state.agents, grid_size=config.grid_size)
 
     if verbose:
         print(f"=== MARKOV LLM: {state.living_count} agents, {config.grid_size}x{config.grid_size} grid ===")
@@ -623,9 +630,10 @@ async def _get_agent_communications(
     agent: Agent,
     perception: str,
     system_prompt: str,
+    living_family_members: str = "",
 ) -> str:
     """Get communication decisions from an agent via LLM. Returns empty JSON on failure."""
-    prompt = build_communication_prompt(perception)
+    prompt = build_communication_prompt(perception, living_family_members=living_family_members)
     try:
         response = await call_llm(
             model=agent.model,

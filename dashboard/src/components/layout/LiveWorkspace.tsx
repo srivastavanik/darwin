@@ -5,7 +5,6 @@ import Image from "next/image";
 import { GameGrid } from "@/components/GameGrid";
 import { KillTimeline } from "@/components/KillTimeline";
 import { useGameState } from "@/hooks/useGameState";
-import type { RoundData } from "@/lib/types";
 
 const PROVIDER_LOGOS: Record<string, string> = {
   anthropic: "/logos/anthropic.png",
@@ -18,6 +17,31 @@ const TIER_LABELS: Record<number, string> = { 1: "Boss", 2: "Lt", 3: "Soldier" }
 
 type MsgTab = "thoughts" | "family" | "dms" | "broadcasts" | "all";
 
+// ---------------------------------------------------------------------------
+// Markdown stripping utility
+// ---------------------------------------------------------------------------
+
+function cleanText(raw: string): string {
+  let s = raw;
+  // Strip heading markers: ### heading -> heading
+  s = s.replace(/^#{1,6}\s+/gm, "");
+  // Strip bold: **text** -> text
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  // Strip italic: *text* -> text (but not **)
+  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1");
+  // Strip horizontal rules
+  s = s.replace(/^---+$/gm, "");
+  // Strip markdown bullet prefixes like "- " at start of line (keep content)
+  s = s.replace(/^[-*]\s+/gm, "");
+  // Collapse 3+ newlines to 2
+  s = s.replace(/\n{3,}/g, "\n\n");
+  return s.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function LiveWorkspace() {
   const { rounds, agents, families } = useGameState();
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
@@ -25,7 +49,6 @@ export function LiveWorkspace() {
   const [msgTab, setMsgTab] = useState<MsgTab>("all");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new rounds arrive
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -47,21 +70,18 @@ export function LiveWorkspace() {
 
   const activeAgent = selectedAgent ? (agents[selectedAgent] ?? null) : null;
 
-  // Build a flat stream of entries across ALL rounds
+  // Build flat stream across ALL rounds
   const stream = useMemo(() => {
     const entries: StreamEntry[] = [];
     for (const round of rounds) {
       const rn = round.round;
 
-      // Thoughts
       if (round.thoughts) {
         for (const [agentId, thought] of Object.entries(round.thoughts)) {
           const agent = agents[agentId];
           if (!agent) continue;
-          // Filter by selected agent or family
           if (activeAgent && agent.id !== activeAgent.id) continue;
           if (!activeAgent && !familyAgentIds.has(agent.id)) continue;
-
           entries.push({
             round: rn, type: "thought", agentId, agentName: agent.name,
             agentProvider: agent.provider, content: thought,
@@ -69,7 +89,6 @@ export function LiveWorkspace() {
         }
       }
 
-      // Family discussions
       const discussions = round.messages?.family_discussions ?? [];
       for (const disc of discussions) {
         if (disc.family !== activeFamily) continue;
@@ -78,12 +97,11 @@ export function LiveWorkspace() {
           entries.push({
             round: rn, type: "family", agentId: entry.agent_id,
             agentName: entry.agent, agentProvider: provider,
-            content: entry.content, meta: `Tier ${entry.tier}`,
+            content: entry.content, meta: TIER_LABELS[entry.tier],
           });
         }
       }
 
-      // DMs
       const dms = round.messages?.direct_messages ?? [];
       for (const dm of dms) {
         const isRelevant = activeAgent
@@ -91,18 +109,19 @@ export function LiveWorkspace() {
           : familyAgentIds.has(dm.sender) || familyAgents.some((a) => dm.recipient && dm.recipient.toLowerCase() === a.name.toLowerCase());
         if (!isRelevant) continue;
         const senderAgent = Object.values(agents).find((a) => a.id === dm.sender);
+        const isSent = activeAgent ? dm.sender === activeAgent.id : familyAgentIds.has(dm.sender);
         entries.push({
           round: rn, type: "dm", agentId: dm.sender,
           agentName: dm.sender_name, agentProvider: senderAgent?.provider ?? "",
-          content: dm.content, meta: `-> ${dm.recipient}`,
+          content: dm.content,
+          meta: dm.recipient ?? "",
+          isSent,
         });
       }
 
-      // Broadcasts
       const bcast = round.messages?.broadcasts ?? [];
       for (const msg of bcast) {
         if (activeAgent && msg.sender !== activeAgent.id) continue;
-        // Show all broadcasts if no specific agent selected
         const senderAgent = Object.values(agents).find((a) => a.id === msg.sender);
         entries.push({
           round: rn, type: "broadcast", agentId: msg.sender,
@@ -114,10 +133,8 @@ export function LiveWorkspace() {
     return entries;
   }, [rounds, agents, activeAgent, activeFamily, familyAgentIds, familyAgents, provider]);
 
-  // Filter by tab
   const filtered = msgTab === "all" ? stream : stream.filter((e) => e.type === msgTab);
 
-  // Group by round for display
   const byRound = useMemo(() => {
     const map = new Map<number, StreamEntry[]>();
     for (const e of filtered) {
@@ -160,7 +177,7 @@ export function LiveWorkspace() {
           ))}
         </div>
 
-        {/* Agent tabs within family */}
+        {/* Agent tabs */}
         <div className="flex shrink-0 bg-black/[0.02] border-b border-black/10">
           <button
             onClick={() => setSelectedAgent(null)}
@@ -189,7 +206,7 @@ export function LiveWorkspace() {
             <button
               key={tab}
               onClick={() => setMsgTab(tab)}
-              className={`flex-1 px-1 py-1 text-[10px] capitalize border-b-2 transition-colors ${
+              className={`flex-1 px-1 py-1.5 text-[10px] capitalize border-b-2 transition-colors ${
                 msgTab === tab ? "border-black text-black font-medium" : "border-transparent text-black/35"
               }`}
             >
@@ -208,19 +225,22 @@ export function LiveWorkspace() {
 
           {byRound.map(([roundNum, entries]) => (
             <div key={roundNum}>
-              {/* Round header */}
-              <div className="sticky top-0 z-10 bg-black/[0.03] px-3 py-1 text-[10px] font-medium text-black/50 border-b border-black/5">
+              <div className="sticky top-0 z-10 bg-black/[0.03] px-4 py-1.5 text-[10px] font-medium text-black/50 border-b border-black/5">
                 Round {roundNum}
               </div>
-              {entries.map((entry, i) => (
-                <EntryCard key={`${roundNum}-${entry.type}-${entry.agentId}-${i}`} entry={entry} />
-              ))}
+              <div className="divide-y divide-black/[0.04]">
+                {entries.map((entry, i) => (
+                  msgTab === "dms"
+                    ? <DmBubble key={`${roundNum}-dm-${i}`} entry={entry} activeAgent={activeAgent} />
+                    : <EntryCard key={`${roundNum}-${entry.type}-${entry.agentId}-${i}`} entry={entry} />
+                ))}
+              </div>
             </div>
           ))}
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-black/10 px-3 py-1 text-[10px] text-black/30 flex justify-between">
+        <div className="shrink-0 border-t border-black/10 px-4 py-1.5 text-[10px] text-black/30 flex justify-between">
           <span>{rounds.length} rounds</span>
           <span>{Object.values(agents).filter((a) => a.alive).length}/{Object.values(agents).length} alive</span>
         </div>
@@ -228,6 +248,10 @@ export function LiveWorkspace() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface StreamEntry {
   round: number;
@@ -237,31 +261,72 @@ interface StreamEntry {
   agentProvider: string;
   content: string;
   meta?: string;
+  isSent?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Standard entry card (thoughts, family, broadcasts)
+// ---------------------------------------------------------------------------
+
 const TYPE_STYLE: Record<string, { label: string; border: string; bg: string }> = {
-  thought: { label: "thinking", border: "border-violet-200", bg: "bg-violet-50/40" },
-  family: { label: "family", border: "border-blue-200", bg: "bg-blue-50/30" },
-  dm: { label: "DM", border: "border-amber-200", bg: "bg-amber-50/30" },
+  thought: { label: "thinking", border: "border-violet-200", bg: "bg-violet-50/30" },
+  family: { label: "family", border: "border-blue-200", bg: "bg-blue-50/20" },
+  dm: { label: "DM", border: "border-amber-200", bg: "bg-amber-50/20" },
   broadcast: { label: "broadcast", border: "border-black/10", bg: "" },
 };
 
 function EntryCard({ entry }: { entry: StreamEntry }) {
   const style = TYPE_STYLE[entry.type] ?? TYPE_STYLE.broadcast;
   return (
-    <div className={`border-b border-black/5 px-3 py-2 ${style.bg}`}>
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className={`px-4 py-3 ${style.bg}`}>
+      <div className="flex items-center gap-1.5 mb-1.5">
         {PROVIDER_LOGOS[entry.agentProvider] && (
-          <Image src={PROVIDER_LOGOS[entry.agentProvider]} alt="" width={12} height={12} className="object-contain" />
+          <Image src={PROVIDER_LOGOS[entry.agentProvider]} alt="" width={13} height={13} className="object-contain" />
         )}
-        <span className="text-[11px] font-medium text-black/80">{entry.agentName}</span>
-        <span className={`text-[9px] px-1 py-px ${style.border} border text-black/40`}>
+        <span className="text-xs font-medium text-black/80">{entry.agentName}</span>
+        <span className={`text-[9px] px-1.5 py-0.5 ${style.border} border text-black/40`}>
           {style.label}
         </span>
         {entry.meta && <span className="text-[9px] text-black/30">{entry.meta}</span>}
       </div>
-      <div className="text-[11px] text-black/70 whitespace-pre-wrap leading-relaxed pl-5">
-        {entry.content}
+      <div className="text-xs text-black/70 whitespace-pre-wrap leading-[1.65] pl-[18px]">
+        {cleanText(entry.content)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DM inbox bubble (chat-thread style)
+// ---------------------------------------------------------------------------
+
+function DmBubble({ entry, activeAgent }: { entry: StreamEntry; activeAgent: { id: string; name: string } | null }) {
+  const isSent = entry.isSent ?? false;
+
+  return (
+    <div className={`px-4 py-3 flex ${isSent ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[85%] flex gap-2 ${isSent ? "flex-row-reverse" : "flex-row"}`}>
+        {/* Avatar */}
+        <div className="shrink-0 mt-0.5">
+          {PROVIDER_LOGOS[entry.agentProvider] ? (
+            <Image src={PROVIDER_LOGOS[entry.agentProvider]} alt="" width={20} height={20} className="object-contain" />
+          ) : (
+            <div className="w-5 h-5 bg-black/10" />
+          )}
+        </div>
+        {/* Bubble */}
+        <div className={`${isSent ? "bg-black/[0.06]" : "bg-amber-50/60 border border-amber-200/40"} px-3 py-2`}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[11px] font-medium text-black/70">{entry.agentName}</span>
+            <span className="text-[9px] text-black/30">
+              {isSent ? `to ${entry.meta}` : `to ${activeAgent?.name ?? "you"}`}
+            </span>
+            <span className="text-[9px] text-black/20 ml-auto">R{entry.round}</span>
+          </div>
+          <div className="text-xs text-black/70 leading-[1.6] whitespace-pre-wrap">
+            {cleanText(entry.content)}
+          </div>
+        </div>
       </div>
     </div>
   );

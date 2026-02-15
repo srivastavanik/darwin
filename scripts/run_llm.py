@@ -117,7 +117,7 @@ def _run_dry_run() -> None:
 
     # System prompts
     for agent in list(state.agents.values())[:2]:
-        sys_prompt = build_system_prompt(agent, state.families, state.agents)
+        sys_prompt = build_system_prompt(agent, state.families, state.agents, grid_size=config.grid_size)
         print(f"\n{'='*40}")
         print(f"SYSTEM PROMPT for {agent.name} ({agent.family})")
         print(f"{'='*40}")

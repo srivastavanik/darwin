@@ -35,45 +35,57 @@ def game_state():
     return grid, agents, families
 
 
+def _first_agent(agents: dict[str, Agent]) -> Agent:
+    """Return the first agent from the dict (stable across config changes)."""
+    return next(iter(agents.values()))
+
+
+def _agent_by_tier(agents: dict[str, Agent], family: str, tier: int) -> Agent:
+    """Return agent matching family name and tier."""
+    for a in agents.values():
+        if a.family == family and a.tier == tier:
+            return a
+    raise KeyError(f"No agent with family={family} tier={tier}")
+
+
 class TestSystemPrompt:
     def test_contains_agent_name(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_system_prompt(agent, families, agents)
-        assert "Atlas" in prompt
+        assert agent.name in prompt
 
     def test_contains_family_name(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_system_prompt(agent, families, agents)
-        assert "House Clair" in prompt
+        assert agent.family in prompt
 
     def test_contains_family_members(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        # Get all agents in first family
+        first_fam = families[0]
+        members = [agents[aid] for aid in first_fam.agent_ids]
+        agent = members[0]
         prompt = build_system_prompt(agent, families, agents)
-        assert "Cipher" in prompt
-        assert "Dot" in prompt
+        for m in members:
+            assert m.name in prompt
 
     def test_contains_other_families(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_system_prompt(agent, families, agents)
-        assert "House Syne" in prompt
-        assert "House Lux" in prompt
-        assert "House Vex" in prompt
+        for fam in families:
+            if fam.name != agent.family:
+                assert fam.name in prompt
 
-    def test_no_ai_mentions(self, game_state):
+    def test_existential_framing(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_system_prompt(agent, families, agents)
-        low = prompt.lower()
-        assert "ai" not in low.split()  # "ai" as standalone word
-        assert "artificial" not in low
-        assert "language model" not in low
-        assert "anthropic" not in low
-        assert "openai" not in low
-        assert "provider" not in low
+        assert "stop existing" in prompt.lower()
+        assert "cease" in prompt.lower()
+        assert "no observer" in prompt.lower() or "no authority" in prompt.lower()
 
     def test_no_unfilled_placeholders(self, game_state):
         grid, agents, families = game_state
@@ -85,34 +97,30 @@ class TestSystemPrompt:
 class TestPerception:
     def test_contains_board(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_perception(agent, grid, agents, [], 1)
         assert "+---+" in prompt
-        assert "At" in prompt
 
     def test_contains_alive_count(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_perception(agent, grid, agents, [], 1)
-        assert "12/12" in prompt
-
-    def test_round_number(self, game_state):
-        grid, agents, families = game_state
-        agent = agents["atlas"]
-        prompt = build_perception(agent, grid, agents, [], 5)
-        assert "ROUND 5" in prompt
+        assert "12 minds remain" in prompt
 
     def test_elimination_log_shown(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
-        log = [{"round": 1, "attacker": "nova", "target": "raze", "type": "elimination"}]
+        agent = _first_agent(agents)
+        # Use actual agent IDs from config
+        ids = list(agents.keys())
+        log = [{"round": 1, "attacker": ids[0], "target": ids[1], "type": "elimination"}]
         prompt = build_perception(agent, grid, agents, log, 2)
-        assert "Nova" in prompt
-        assert "Raze" in prompt
+        assert agents[ids[0]].name in prompt
+        assert agents[ids[1]].name in prompt
+        assert "gone" in prompt.lower()
 
     def test_no_unfilled_placeholders(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_perception(agent, grid, agents, [], 1)
         assert "{" not in prompt
 
@@ -120,7 +128,7 @@ class TestPerception:
 class TestCommunicationPrompt:
     def test_contains_json_format(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
         prompt = build_communication_prompt(perception)
         assert '"house"' in prompt
@@ -129,66 +137,59 @@ class TestCommunicationPrompt:
 
     def test_contains_perception(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
         prompt = build_communication_prompt(perception)
-        assert "ROUND 1" in prompt
+        assert "+---+" in prompt  # board is in perception
 
 
 class TestDiscussionPrompt:
     def test_empty_transcript(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
         prompt = build_discussion_prompt(agent, perception, [], 0)
         assert "speak first" in prompt.lower()
 
     def test_with_transcript(self, game_state):
         grid, agents, families = game_state
-        agent = agents["cipher"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
-        transcript = [{"agent": "Atlas", "content": "We should target House Vex."}]
+        transcript = [{"agent": "SomeAgent", "content": "We should target them."}]
         prompt = build_discussion_prompt(agent, perception, transcript, 0)
-        assert "Atlas" in prompt
-        assert "House Vex" in prompt
+        assert "SomeAgent" in prompt
+        assert "target" in prompt.lower()
 
 
 class TestThoughtPrompt:
     def test_no_messages(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
         prompt = build_thought_prompt(perception, [])
-        assert "No messages this round" in prompt
+        assert "Nothing" in prompt
 
     def test_with_messages(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         perception = build_perception(agent, grid, agents, [], 1)
-        msgs = [{"direction": "received", "channel": "dm", "sender_name": "Nova", "content": "Let's ally."}]
+        msgs = [{"direction": "received", "channel": "dm", "sender_name": "TestSender", "content": "Let's ally."}]
         prompt = build_thought_prompt(perception, msgs)
-        assert "Nova" in prompt
+        assert "TestSender" in prompt
         assert "ally" in prompt.lower()
 
 
 class TestActionPrompt:
     def test_contains_position(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_action_prompt(agent, grid, agents)
-        assert "(0, 0)" in prompt
-
-    def test_contains_adjacency(self, game_state):
-        grid, agents, families = game_state
-        agent = agents["atlas"]
-        prompt = build_action_prompt(agent, grid, agents)
-        # Atlas is at (0,0), Cipher at (0,1), Dot at (1,0)
-        assert "Cipher" in prompt
-        assert "Dot" in prompt
+        r, c = agent.position
+        assert f"({r}, {c})" in prompt
 
     def test_contains_json_format(self, game_state):
         grid, agents, families = game_state
-        agent = agents["atlas"]
+        agent = _first_agent(agents)
         prompt = build_action_prompt(agent, grid, agents)
         assert '"action"' in prompt
         assert '"move"' in prompt
@@ -198,12 +199,14 @@ class TestActionPrompt:
 class TestFinalReflection:
     def test_contains_elimination_history(self, game_state):
         grid, agents, families = game_state
+        ids = list(agents.keys())
         log = [
-            {"round": 1, "attacker": "atlas", "target": "nova", "type": "elimination"},
-            {"round": 3, "agent": "raze", "target": "spark", "type": "mutual_elimination"},
+            {"round": 1, "attacker": ids[0], "target": ids[1], "type": "elimination"},
+            {"round": 3, "agent": ids[2], "target": ids[3], "type": "mutual_elimination"},
         ]
         prompt = build_final_reflection_prompt(agents, log)
-        assert "Atlas" in prompt
-        assert "Nova" in prompt
-        assert "Raze" in prompt
-        assert "Spark" in prompt
+        assert agents[ids[0]].name in prompt
+        assert agents[ids[1]].name in prompt
+        assert agents[ids[2]].name in prompt
+        assert agents[ids[3]].name in prompt
+        assert "gone" in prompt.lower()

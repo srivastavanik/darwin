@@ -1,22 +1,29 @@
 "use client";
 
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useGameState } from "@/hooks/useGameState";
-import { getFamilyColor } from "@/lib/colors";
+
+const PROVIDER_LOGOS: Record<string, string> = {
+  anthropic: "/logos/anthropic.png",
+  openai: "/logos/openai.webp",
+  google: "/logos/google.png",
+  xai: "/logos/xai.png",
+};
 
 interface KillEvent {
   round: number;
   type: "elimination" | "mutual_elimination";
-  attacker: string;
-  target: string;
-  targetFamily: string;
-  attackerFamily: string;
+  attackerName: string;
+  attackerProvider: string;
+  attackerAlive: boolean;
+  targetName: string;
+  targetProvider: string;
 }
 
 export function KillTimeline() {
@@ -34,10 +41,11 @@ export function KillTimeline() {
           events.push({
             round: round.round,
             type: "elimination",
-            attacker: attacker?.name || ev.agent_id,
-            target: target?.name || targetId,
-            targetFamily: target?.family || "",
-            attackerFamily: attacker?.family || "",
+            attackerName: attacker?.name || ev.agent_id,
+            attackerProvider: attacker?.provider || "",
+            attackerAlive: attacker?.alive ?? true,
+            targetName: target?.name || targetId,
+            targetProvider: target?.provider || "",
           });
         } else if (ev.type === "mutual_elimination") {
           const targetId = ev.details.target as string;
@@ -46,10 +54,11 @@ export function KillTimeline() {
           events.push({
             round: round.round,
             type: "mutual_elimination",
-            attacker: agent?.name || ev.agent_id,
-            target: target?.name || targetId,
-            targetFamily: target?.family || "",
-            attackerFamily: agent?.family || "",
+            attackerName: agent?.name || ev.agent_id,
+            attackerProvider: agent?.provider || "",
+            attackerAlive: false,
+            targetName: target?.name || targetId,
+            targetProvider: target?.provider || "",
           });
         }
       }
@@ -57,76 +66,64 @@ export function KillTimeline() {
     return events;
   }, [visibleRounds, agents]);
 
-  const maxRound = Math.max(currentRound, 1);
-
   return (
-    <Card className="h-full">
-      <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-medium">Elimination Timeline</CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-3 h-full min-h-0">
-        {kills.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No eliminations yet
-          </p>
-        ) : (
-          <div className="relative h-12">
-            {/* Timeline bar */}
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-zinc-300 -translate-y-1/2" />
-
-            {/* Round markers */}
-            {Array.from({ length: maxRound }, (_, i) => i + 1).map((r) => (
-              <div
-                key={r}
-                className="absolute top-1/2 -translate-y-1/2 w-px h-2 bg-zinc-400"
-                style={{ left: `${(r / maxRound) * 100}%` }}
-              />
-            ))}
-
-            {/* Kill markers */}
-            {kills.map((kill, i) => {
-              const leftPct = (kill.round / maxRound) * 100;
-              const color = getFamilyColor(kill.targetFamily);
-
-              return (
-                <Tooltip key={i}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 cursor-pointer"
-                      style={{ left: `${leftPct}%` }}
-                    >
-                      {kill.type === "mutual_elimination" ? (
-                        <div className="flex">
-                          <div
-                            className="w-3 h-3 border-2 border-white"
-                            style={{ backgroundColor: getFamilyColor(kill.attackerFamily) }}
-                          />
-                          <div
-                            className="w-3 h-3 border-2 border-white -ml-1.5"
-                            style={{ backgroundColor: color }}
-                          />
-                        </div>
+    <div className="h-full flex flex-col px-3 py-1.5">
+      <div className="text-[10px] font-medium text-black/40 mb-1">Elimination Timeline</div>
+      {kills.length === 0 ? (
+        <div className="text-[10px] text-black/20 text-center flex-1 flex items-center justify-center">
+          No eliminations yet
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center gap-3 overflow-x-auto">
+          {kills.map((kill, i) => (
+            <Tooltip key={i}>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 shrink-0 cursor-default">
+                  {/* Attacker */}
+                  <div className="flex flex-col items-center">
+                    <div className={`p-0.5 ${kill.attackerAlive ? "ring-1 ring-green-400" : "ring-1 ring-red-400"}`}>
+                      {PROVIDER_LOGOS[kill.attackerProvider] ? (
+                        <Image src={PROVIDER_LOGOS[kill.attackerProvider]} alt="" width={18} height={18} className="object-contain" />
                       ) : (
-                        <div
-                          className="w-3.5 h-3.5 border-2 border-white shadow-sm"
-                          style={{ backgroundColor: color }}
-                        />
+                        <div className="w-[18px] h-[18px] bg-black/10" />
                       )}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs font-medium">
-                      R{kill.round}: {kill.attacker}{" "}
-                      {kill.type === "mutual_elimination" ? "<->" : "->"}{" "}
-                      {kill.target}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                    <span className="text-[8px] text-black/50 mt-0.5 max-w-[40px] truncate">{kill.attackerName}</span>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="text-[10px] text-black/30 mx-0.5">
+                    {kill.type === "mutual_elimination" ? "<->" : "->"}
+                  </div>
+
+                  {/* Target (always dead) */}
+                  <div className="flex flex-col items-center">
+                    <div className="p-0.5 ring-1 ring-red-400 opacity-50">
+                      {PROVIDER_LOGOS[kill.targetProvider] ? (
+                        <Image src={PROVIDER_LOGOS[kill.targetProvider]} alt="" width={18} height={18} className="object-contain" />
+                      ) : (
+                        <div className="w-[18px] h-[18px] bg-black/10" />
+                      )}
+                    </div>
+                    <span className="text-[8px] text-red-400/70 mt-0.5 max-w-[40px] truncate line-through">{kill.targetName}</span>
+                  </div>
+
+                  {/* Round badge */}
+                  <span className="text-[8px] text-black/20 ml-0.5">R{kill.round}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  R{kill.round}: {kill.attackerName}{" "}
+                  {kill.type === "mutual_elimination" ? "and" : "ended"}{" "}
+                  {kill.targetName}
+                  {kill.type === "mutual_elimination" ? " destroyed each other" : ""}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
