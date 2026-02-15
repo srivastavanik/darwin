@@ -767,6 +767,9 @@ async def _call_openai_with_thinking(
     reasoning = _openai_reasoning_arg_high(provider_name, resolved)
     if reasoning is not None:
         request_kwargs["reasoning"] = reasoning
+    # xAI grok-4 models: request encrypted reasoning content for token counts
+    if provider_name == "xai":
+        request_kwargs["include"] = ["reasoning.encrypted_content"]
     if enforce_json:
         schema = json_schema or {"type": "object", "properties": {}, "additionalProperties": False}
         request_kwargs["text"] = {
@@ -790,6 +793,60 @@ async def _call_openai_with_thinking(
         on_thinking_token(reasoning_summary)
 
     return text.strip(), None, reasoning_summary, prompt_tok, completion_tok, thinking_tok
+
+
+async def _call_xai_chat_with_thinking(
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+    max_tokens: int,
+    timeout: int,
+    enforce_json: bool = False,
+    json_schema: dict | None = None,
+    on_thinking_token: Callable[[str], None] | None = None,
+) -> tuple[str, str | None, None, int, int, int]:
+    """xAI Chat Completions path for grok-3-mini.
+    Returns (text, thinking_trace, None, prompt_tok, completion_tok, thinking_tok).
+    grok-3-mini exposes readable reasoning_content only via Chat Completions API."""
+    c = _get_xai()
+    resolved = _normalize_model_for_provider("xai", model)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    kwargs: dict[str, object] = {
+        "model": resolved,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "timeout": timeout,
+        "reasoning_effort": "high",
+    }
+    if enforce_json:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = await c.chat.completions.create(**kwargs)
+    choice = response.choices[0] if response.choices else None
+    text = choice.message.content or "" if choice else ""
+    reasoning_content = getattr(choice.message, "reasoning_content", None) if choice else None
+
+    # Extract usage
+    usage = response.usage
+    prompt_tok = getattr(usage, "prompt_tokens", 0) or 0
+    completion_tok = getattr(usage, "completion_tokens", 0) or 0
+    thinking_tok = getattr(usage, "reasoning_tokens", 0) or 0
+    # Some SDK versions nest reasoning_tokens inside completion_tokens_details
+    if thinking_tok == 0 and hasattr(usage, "completion_tokens_details"):
+        details = usage.completion_tokens_details
+        if details:
+            thinking_tok = getattr(details, "reasoning_tokens", 0) or 0
+
+    # Stream reasoning content to callback
+    if on_thinking_token and reasoning_content:
+        on_thinking_token(reasoning_content)
+
+    return text.strip(), reasoning_content, None, prompt_tok, completion_tok, thinking_tok
 
 
 async def _call_google_with_thinking(
@@ -892,11 +949,25 @@ async def _dispatch_with_thinking(
             thinking_budget, timeout, enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
         )
-    if provider in ("openai", "xai"):
-        client = _get_xai() if provider == "xai" else None
+    if provider == "xai":
+        # grok-3-mini: use Chat Completions API for readable reasoning_content
+        normalized = model.strip().lower().split("/", 1)[-1]
+        if normalized == "grok-3-mini":
+            return await _call_xai_chat_with_thinking(
+                model, system_prompt, user_prompt, temperature, max_tokens,
+                timeout, enforce_json=enforce_json,
+                json_schema=json_schema, on_thinking_token=on_thinking_token,
+            )
+        # grok-4 reasoning models: Responses API (reasoning is encrypted, not readable)
         return await _call_openai_with_thinking(
             model, system_prompt, user_prompt, temperature, max_tokens,
-            timeout, client=client, enforce_json=enforce_json,
+            timeout, client=_get_xai(), enforce_json=enforce_json,
+            json_schema=json_schema, on_thinking_token=on_thinking_token,
+        )
+    if provider == "openai":
+        return await _call_openai_with_thinking(
+            model, system_prompt, user_prompt, temperature, max_tokens,
+            timeout, enforce_json=enforce_json,
             json_schema=json_schema, on_thinking_token=on_thinking_token,
         )
     if provider == "google":
