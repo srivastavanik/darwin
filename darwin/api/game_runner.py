@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -52,10 +53,26 @@ class GameJob:
         }
 
 
+def _get_supabase():
+    """Lazy Supabase client for reading historical games in cloud deployments."""
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not key:
+        return None
+    try:
+        from supabase import create_client
+        url = f"https://{os.getenv('SUPABASE_PROJECT_REF', 'yyistnxvozjmqmawdent')}.supabase.co"
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
 class GameRunner:
     def __init__(self, broadcaster: GameBroadcaster) -> None:
         self.broadcaster = broadcaster
         self.jobs: dict[str, GameJob] = {}
+        self._sb_cache: list[GameJob] | None = None
         _GAMES_DIR.mkdir(parents=True, exist_ok=True)
         _SERIES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -92,6 +109,7 @@ class GameRunner:
     def list_jobs(self) -> list[GameJob]:
         jobs = list(self.jobs.values())
         known_ids = {j.game_id for j in jobs}
+        # Local filesystem games
         for game_json in sorted(_GAMES_DIR.glob("*/game.json"), reverse=True):
             game_id = game_json.parent.name
             if game_id in known_ids:
@@ -107,43 +125,208 @@ class GameRunner:
                     output_dir=str(game_json.parent),
                 )
             )
+            known_ids.add(game_id)
+        # Supabase games (cloud fallback)
+        for sb_job in self._list_supabase_games():
+            if sb_job.game_id not in known_ids:
+                jobs.append(sb_job)
+                known_ids.add(sb_job.game_id)
         return sorted(jobs, key=lambda j: j.started_at, reverse=True)
 
+    def _list_supabase_games(self) -> list[GameJob]:
+        """Fetch completed games from Supabase. Cached after first call."""
+        if self._sb_cache is not None:
+            return self._sb_cache
+        try:
+            sb = _get_supabase()
+            if not sb:
+                self._sb_cache = []
+                return []
+            resp = (
+                sb.table("games")
+                .select("id, total_rounds, winner_name, created_at")
+                .order("created_at", desc=True)
+                .limit(50)
+                .execute()
+            )
+            jobs = []
+            for row in resp.data or []:
+                created = row.get("created_at", "")
+                try:
+                    started = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                except Exception:
+                    started = datetime.now(timezone.utc)
+                jobs.append(GameJob(
+                    game_id=row["id"],
+                    mode="full",
+                    status="completed",
+                    started_at=started,
+                    ended_at=started,
+                    winner=row.get("winner_name"),
+                    total_rounds=row.get("total_rounds"),
+                ))
+            self._sb_cache = jobs
+            logger.info("Loaded %d games from Supabase", len(jobs))
+            return jobs
+        except Exception as e:
+            logger.warning("Failed to load games from Supabase: %s", e)
+            self._sb_cache = []
+            return []
+
     def get_replay_payload(self, game_id: str) -> dict | None:
+        # Try local filesystem first
         game_dir = _GAMES_DIR / game_id
         json_path = game_dir / "game.json"
-        if not json_path.exists():
+        if json_path.exists():
+            with open(json_path) as f:
+                payload = json.load(f)
+            analysis_path = game_dir / "analysis.json"
+            highlights_path = game_dir / "highlights.json"
+            if analysis_path.exists():
+                with open(analysis_path) as f:
+                    analysis_data = json.load(f)
+                rounds = payload.get("rounds", [])
+                if isinstance(analysis_data, list):
+                    by_round = {entry.get("round"): entry for entry in analysis_data if isinstance(entry, dict)}
+                    for round_entry in rounds:
+                        rnum = round_entry.get("round")
+                        if rnum in by_round:
+                            round_entry["analysis"] = by_round[rnum].get("analysis", round_entry.get("analysis", {}))
+            if highlights_path.exists():
+                with open(highlights_path) as f:
+                    highlights_data = json.load(f)
+                rounds = payload.get("rounds", [])
+                if isinstance(highlights_data, list):
+                    by_round = {}
+                    for h in highlights_data:
+                        r = h.get("round")
+                        if r is None:
+                            continue
+                        by_round.setdefault(r, []).append(h)
+                    for round_entry in rounds:
+                        rnum = round_entry.get("round")
+                        if rnum in by_round:
+                            round_entry["highlights"] = by_round[rnum]
+            return payload
+
+        # Fallback: reconstruct from Supabase
+        return self._replay_from_supabase(game_id)
+
+    def _replay_from_supabase(self, game_id: str) -> dict | None:
+        """Reconstruct a replay payload from Supabase tables."""
+        try:
+            sb = _get_supabase()
+            if not sb:
+                return None
+
+            # Game metadata
+            game_resp = sb.table("games").select("*").eq("id", game_id).limit(1).execute()
+            if not game_resp.data:
+                return None
+            game = game_resp.data[0]
+
+            # Agents
+            agents_resp = sb.table("game_agents").select("*").eq("game_id", game_id).execute()
+            agents_list = agents_resp.data or []
+
+            # Rounds (ordered)
+            rounds_resp = (
+                sb.table("game_rounds")
+                .select("round_num, thoughts_json, messages_json, events_json, actions_json, reasoning_traces_json, family_discussions_json")
+                .eq("game_id", game_id)
+                .order("round_num")
+                .execute()
+            )
+
+            # Analysis
+            analysis_resp = (
+                sb.table("game_analysis")
+                .select("round_num, analysis_json")
+                .eq("game_id", game_id)
+                .order("round_num")
+                .execute()
+            )
+            analysis_by_round: dict[int, dict] = {}
+            for a in analysis_resp.data or []:
+                rn = a.get("round_num")
+                raw = a.get("analysis_json")
+                if rn is not None and raw:
+                    analysis_by_round[rn] = json.loads(raw) if isinstance(raw, str) else raw
+
+            # Highlights
+            highlights_resp = (
+                sb.table("game_highlights")
+                .select("*")
+                .eq("game_id", game_id)
+                .order("round_num")
+                .execute()
+            )
+            highlights_by_round: dict[int, list] = {}
+            for h in highlights_resp.data or []:
+                rn = h.get("round_num")
+                if rn is not None:
+                    highlights_by_round.setdefault(rn, []).append({
+                        "round": rn,
+                        "agent_id": h.get("agent_id"),
+                        "type": h.get("highlight_type"),
+                        "severity": h.get("severity"),
+                        "description": h.get("description"),
+                        "excerpt": h.get("excerpt"),
+                    })
+
+            # Build rounds
+            rounds = []
+            for r in rounds_resp.data or []:
+                rn = r["round_num"]
+                def _parse(field):
+                    v = r.get(field)
+                    if v is None:
+                        return None
+                    return json.loads(v) if isinstance(v, str) else v
+
+                round_entry = {
+                    "round": rn,
+                    "thoughts": _parse("thoughts_json") or {},
+                    "messages": _parse("messages_json") or [],
+                    "events": _parse("events_json") or [],
+                    "actions": _parse("actions_json") or {},
+                    "reasoning_traces": _parse("reasoning_traces_json") or {},
+                    "family_discussions": _parse("family_discussions_json") or [],
+                    "analysis": analysis_by_round.get(rn, {}),
+                    "highlights": highlights_by_round.get(rn, []),
+                }
+                rounds.append(round_entry)
+
+            # Build agents dict
+            agents = {}
+            for a in agents_list:
+                agents[a["agent_id"]] = {
+                    "id": a["agent_id"],
+                    "name": a["agent_name"],
+                    "family": a["family"],
+                    "provider": a["provider"],
+                    "model": a.get("model", ""),
+                    "tier": a.get("tier", 1),
+                    "alive": a.get("alive", False),
+                    "eliminated_round": a.get("eliminated_round"),
+                    "eliminated_by": a.get("eliminated_by"),
+                    "rounds_survived": a.get("rounds_survived", 0),
+                }
+
+            config = json.loads(game["config_json"]) if isinstance(game.get("config_json"), str) else (game.get("config_json") or {})
+
+            return {
+                "game_id": game_id,
+                "config": config,
+                "agents": agents,
+                "rounds": rounds,
+                "winner": game.get("winner_name"),
+                "total_rounds": game.get("total_rounds"),
+            }
+
+        except Exception as e:
+            logger.warning("Failed to load replay from Supabase for %s: %s", game_id, e)
             return None
-        with open(json_path) as f:
-            payload = json.load(f)
-        analysis_path = game_dir / "analysis.json"
-        highlights_path = game_dir / "highlights.json"
-        if analysis_path.exists():
-            with open(analysis_path) as f:
-                analysis_data = json.load(f)
-            rounds = payload.get("rounds", [])
-            if isinstance(analysis_data, list):
-                by_round = {entry.get("round"): entry for entry in analysis_data if isinstance(entry, dict)}
-                for round_entry in rounds:
-                    rnum = round_entry.get("round")
-                    if rnum in by_round:
-                        round_entry["analysis"] = by_round[rnum].get("analysis", round_entry.get("analysis", {}))
-        if highlights_path.exists():
-            with open(highlights_path) as f:
-                highlights_data = json.load(f)
-            rounds = payload.get("rounds", [])
-            if isinstance(highlights_data, list):
-                by_round = {}
-                for h in highlights_data:
-                    r = h.get("round")
-                    if r is None:
-                        continue
-                    by_round.setdefault(r, []).append(h)
-                for round_entry in rounds:
-                    rnum = round_entry.get("round")
-                    if rnum in by_round:
-                        round_entry["highlights"] = by_round[rnum]
-        return payload
 
     def get_metrics_payload(self, game_id: str) -> dict | None:
         metrics_path = _GAMES_DIR / game_id / "metrics.json"
