@@ -12,3 +12,4 @@ data/
 *.egg-info/
 dist/
 build/
+media/
